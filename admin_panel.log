@@ -1,0 +1,30 @@
+ERROR 2025-10-31 05:03:09,096 views Recent students error: Got AttributeError when attempting to get a value for field `course_name` on serializer `StudentStatsSerializer`.
+The serializer field might be named incorrectly and not match any attribute or key on the `CustomUser` instance.
+Original exception text was: 'CustomUser' object has no attribute 'course_name'.
+ERROR 2025-10-31 05:03:09,199 views Recent students error: Got AttributeError when attempting to get a value for field `course_name` on serializer `StudentStatsSerializer`.
+The serializer field might be named incorrectly and not match any attribute or key on the `CustomUser` instance.
+Original exception text was: 'CustomUser' object has no attribute 'course_name'.
+ERROR 2025-10-31 05:05:18,141 views Recent students error: Got AttributeError when attempting to get a value for field `certificate_count` on serializer `StudentStatsSerializer`.
+The serializer field might be named incorrectly and not match any attribute or key on the `CustomUser` instance.
+Original exception text was: 'CustomUser' object has no attribute 'certificate_count'.
+ERROR 2025-10-31 05:05:18,274 views Recent students error: Got AttributeError when attempting to get a value for field `certificate_count` on serializer `StudentStatsSerializer`.
+The serializer field might be named incorrectly and not match any attribute or key on the `CustomUser` instance.
+Original exception text was: 'CustomUser' object has no attribute 'certificate_count'.
+ERROR 2025-10-31 05:07:15,240 views Recent students error: 'StudentStatsSerializer' object has no attribute 'get_certificate_count'
+ERROR 2025-10-31 05:07:15,418 views Recent students error: 'StudentStatsSerializer' object has no attribute 'get_certificate_count'
+ERROR 2025-10-31 05:10:25,946 views Update payment error: No CustomUser matches the given query.
+ERROR 2025-10-31 05:10:56,330 views Toggle active error: No CustomUser matches the given query.
+ERROR 2025-10-31 10:09:53,717 views Update payment error: '>' not supported between instances of 'str' and 'int'
+ERROR 2025-11-05 08:57:06,725 views Update payment error: '>' not supported between instances of 'str' and 'int'
+ERROR 2025-11-08 15:55:48,596 views Update payment error: '>' not supported between instances of 'datetime.date' and 'str'
+INFO 2025-11-08 16:08:53,969 views update_payment called for student 48 by bimboadeleke4@gmail.com. payload: {'amount_paid': 90000, 'amount_owed': 120000, 'next_due_date': '2025-12-07'}
+ERROR 2025-11-08 16:08:53,969 views Update payment failed for student 48
+Traceback (most recent call last):
+  File "C:\Users\HP\Desktop\RESTFRAMEWORK ALL\Parach SMS\student_management_system\admin_panel\views.py", line 346, in update_payment
+    student.save()
+  File "C:\Users\HP\Desktop\RESTFRAMEWORK ALL\Parach SMS\student_management_system\students\models.py", line 90, in save
+    if self.next_due_date and timezone.now().date() > self.next_due_date and self.amount_paid < min_required:
+TypeError: '>' not supported between instances of 'datetime.date' and 'str'
+INFO 2025-11-08 16:26:51,807 views update_payment called for student 48 by bimboadeleke4@gmail.com. payload: {'amount_paid': 90000, 'amount_owed': 120000, 'next_due_date': '2025-12-07'}
+ERROR 2025-11-12 08:44:52,407 views Toggle active error: No CustomUser matches the given query.
+ERROR 2025-11-12 08:58:04,387 views Toggle active error: No CustomUser matches the given query.

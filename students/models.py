@@ -37,12 +37,18 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     GENDER_CHOICES = [
         ('male', 'Male'),
         ('female', 'Female'),
-        ('other', 'Other'),
+    ]
+
+    CENTER_CHOICES = [
+        ("Orogun", "Orogun"),
+        ("Samonda", "Samonda"),
+        ("Online", "Online"),
     ]
 
     email = models.EmailField(unique=True)
     username = models.CharField(max_length=150, blank=True, null=True)
     name = models.CharField(max_length=255, blank=True, null=True)
+    center = models.CharField(max_length=20, choices=CENTER_CHOICES, blank=True, null=True)
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True, null=True)
     course = models.ForeignKey('courses.Courses', on_delete=models.SET_NULL, null=True, blank=True)
     birth_date = models.DateField(blank=True, null=True)

@@ -19,4 +19,5 @@ urlpatterns = [
     path('statistics/', views.payment_statistics, name='payment_statistics'),
     path('get_balance/', views.get_balance, name='get_balance'),
     path('student-transactions/', views.StudentTransactionListView.as_view(), name='student-transactions'),   
+    path('download/<str:reference>/', views.download_receipt, name='download_receipt'),
 ]

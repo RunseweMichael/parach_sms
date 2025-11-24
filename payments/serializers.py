@@ -25,7 +25,7 @@ class PaymentItemSerializer(serializers.ModelSerializer):
 class PaymentReceiptSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentReceipt
-        fields = ['pdf_file', 'created_at']
+        fields = '__all__'
 
 
 class TransactionSerializer(serializers.ModelSerializer):

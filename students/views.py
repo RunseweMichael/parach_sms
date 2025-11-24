@@ -35,7 +35,7 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     queryset = User.objects.all().order_by('-id')
     serializer_class = UserProfileSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser, AllowAny]
+    permission_classes = [IsAuthenticated]
     authentication_classes = [TokenAuthentication]
 
     def get_permissions(self):
@@ -46,6 +46,14 @@ class UserViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsAdminUser()]
         else:
             return [IsAuthenticated()]
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        user = self.get_object()
+        serializer = self.get_serializer(user, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     # -----------------------------------------
     # 1️⃣ Register new user

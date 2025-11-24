@@ -5,6 +5,11 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.db.models import Count, Sum, Q, Avg, F
 from django.utils import timezone
 from .permissions import IsSuperAdmin, IsStaffOrSuperAdmin
+from rest_framework.pagination import PageNumberPagination
+from students.serializers import UserProfileSerializer
+from django.contrib.auth import get_user_model
+from admin_panel.notifications import send_whatsapp_message
+from .notifications import format_phone_number, send_whatsapp_message
 from datetime import timedelta, datetime
 from .models import AdminActivity, Notification
 from .serializers import (
@@ -16,7 +21,6 @@ from students.models import CustomUser
 from courses.models import Courses
 from certificates.models import Certificate
 import logging
-
 
 
 logger = logging.getLogger(__name__)
@@ -537,21 +541,6 @@ def export_data(request):
 
 
 
-
-
-
-
-
-from rest_framework.decorators import api_view, permission_classes
-from .permissions import IsSuperAdmin
-from students.models import CustomUser
-
-# users/views.py or admin_panel/views.py
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAdminUser
-from rest_framework.response import Response
-from rest_framework import status
-
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def toggle_staff_role(request):
@@ -578,19 +567,6 @@ def toggle_staff_role(request):
 
 
 
-
-        
-
-
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-from rest_framework.pagination import PageNumberPagination
-from rest_framework import status
-from django.db.models import Q
-from students.models import CustomUser  # your user model
-from students.serializers import UserProfileSerializer  # your user serializer
-from rest_framework.permissions import IsAdminUser
-
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def paginated_users(request):
@@ -616,3 +592,127 @@ def paginated_users(request):
     serializer = UserProfileSerializer(result_page, many=True)
 
     return paginator.get_paginated_response(serializer.data)
+
+
+
+
+User = get_user_model()
+
+# @api_view(["POST"])
+# @permission_classes([IsAdminUser])
+# def notify_defaulters(request):
+#     student_ids = request.data.get("student_ids", [])
+#     if not student_ids:
+#         return Response({"error": "No students selected"}, status=400)
+
+#     students = User.objects.filter(id__in=student_ids, is_active=True)
+#     failed = []
+
+#     for student in students:
+#         if not student.phone_number:
+#             failed.append(f"{student.name} (No phone number)")
+#             continue
+
+#         phone = format_phone_number(student.phone_number)
+#         due_date = student.next_due_date.strftime("%Y-%m-%d") if student.next_due_date else "N/A"
+
+#         # Branded message
+#         message = (
+#             f"🏢 *Parach ICT Academy.*\n\n" 
+#             f"Hello {student.name},\n"
+#             f"💰 You have an outstanding payment of *₦{student.amount_owed:.2f}*.\n"
+#             f"📅 Please pay by *{due_date}*.\n\n"
+#             "For assistance, reply to this message or visit our website: https://https://parachictacademy.com.ng/\n"
+#             "✅ Thank you for being part of Parach Academy!"
+#         )
+
+#         success, result = send_whatsapp_message(phone, message)
+#         if not success:
+#             failed.append(f"{student.name} ({result})")
+
+#     if failed:
+#         return Response({"message": "Some notifications failed", "failed": failed})
+    
+#     return Response({"message": f"Notifications sent to {students.count() - len(failed)} students"})
+
+
+
+
+
+
+
+
+
+
+
+
+
+# views.py
+import json
+import requests
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
+from students.models import CustomUser as Student
+
+TERMII_API_KEY = settings.TERMII_API_KEY
+TERMII_BASE_URL = settings.TERMII_BASE_URL  # e.g., "https://v3.api.termii.com"
+
+@csrf_exempt
+def notify_defaulters(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST method required"}, status=400)
+
+    # Parse JSON body
+    try:
+        data = json.loads(request.body)
+        student_ids = data.get("student_ids", [])
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    if not student_ids:
+        return JsonResponse({"error": "No students selected"}, status=400)
+
+    # Fetch students
+    students = Student.objects.filter(id__in=student_ids)
+
+    if not students.exists():
+        return JsonResponse({"error": "No students found"}, status=400)
+
+    # Send SMS individually for personalization
+    results = []
+    for student in students:
+        if not student.phone_number:
+            continue  # skip students without phone numbers
+
+        next_due = student.next_due_date.strftime("%d/%m/%Y") if student.next_due_date else "N/A"
+        message = (
+            f"Dear {student.name or 'Student'}, your payment of ₦{student.amount_owed:,.2f} "
+            f"is overdue. Please settle your dues by {next_due}."
+            f"✅ Thank you for being part of Parach Academy!"
+        )
+
+        payload = {
+            "to": f"+{student.phone_number}",
+            "from": "ParachICT",  # your sender ID
+            "sms": message,
+            "type": "plain",
+            "channel": "dnd",
+            "api_key": TERMII_API_KEY
+        }
+
+        try:
+            response = requests.post(f"{TERMII_BASE_URL}/api/sms/send", json=payload, timeout=10)
+            response.raise_for_status()
+            resp_data = response.json()
+            results.append({"student": student.email, "status": "success", "termii_response": resp_data})
+        except requests.RequestException as e:
+            results.append({"student": student.email, "status": "failed", "error": str(e)})
+
+    if not results:
+        return JsonResponse({"error": "No valid phone numbers found"}, status=400)
+
+    return JsonResponse({
+        "message": f"Notifications processed for {len(results)} students",
+        "results": results
+    })

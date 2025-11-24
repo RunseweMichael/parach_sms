@@ -77,26 +77,18 @@ class Transaction(models.Model):
 
 
 class PaymentReceipt(models.Model):
-    transaction = models.OneToOneField(Transaction, on_delete=models.CASCADE, related_name='receipt')
-    receipt_number = models.CharField(max_length=50, unique=True)
-    generated_at = models.DateTimeField(auto_now_add=True)
-    pdf_file = models.FileField(upload_to='receipts/', blank=True, null=True)
-
-    def __str__(self):
-        return f"Receipt {self.receipt_number}"
-
-
-class PaymentReceipt(models.Model):
     transaction = models.OneToOneField(
-        'Transaction',
+        Transaction,
         on_delete=models.CASCADE,
         related_name='receipt'
     )
+    receipt_number = models.CharField(max_length=50, unique=True, null=True, blank=True)
     pdf_file = models.FileField(upload_to='receipts/')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Receipt for {self.transaction.reference}"
+        return f"Receipt {self.receipt_number} for {self.transaction.reference}"
+
 
 
 class Coupon(models.Model):

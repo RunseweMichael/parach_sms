@@ -7,6 +7,10 @@ from .utils import generate_certificate_image
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from django.core.files import File
 import logging
+from django.conf import settings
+from django.core.mail import send_mail
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +66,74 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 certificate.certificate_file.name = cert_path
                 certificate.is_approved = True
                 certificate.save()
+
+                # I want to send an email notification to both the admin and student for future reference purposes.
+                # ---------------------------------------------------------
+                # ✅ Send Email Notifications After Certificate Approval
+                # ---------------------------------------------------------
+
+                student = certificate.student
+                course = certificate.course
+                admin_email = getattr(settings, "ADMIN_EMAIL", None)
+
+                # ✉️ Email to Student
+                from django.template.loader import render_to_string
+                from django.utils import timezone
+
+                # ================================
+                # ✉️ Email to Student (HTML)
+                # ================================
+                try:
+                    context = {
+                        "name": student.name or student.email,
+                        "course_name": course.course_name,
+                        "year": timezone.now().year,
+                        "dashboard_url": "https://yourdomain.com/dashboard",   # UPDATE WITH ACTUAL DASHBOARD URL
+                        "logo": "https://parachictacademy.com.ng/wp-content/uploads/2019/08/Parach-computers-ibadan-logo-1-e1565984209812.png"
+                    }
+
+                    html_message = render_to_string("emails/certificate_student.html", context)
+
+                    send_mail(
+                        subject="🎉 Congratulations! Your Certificate Has Been Approved",
+                        message="Your email client does not support HTML.",
+                        html_message=html_message,
+                        from_email=f"Parach ICT Academy <{settings.DEFAULT_FROM_EMAIL}>",
+                        recipient_list=[student.email],
+                        fail_silently=True,
+                    )
+
+                except Exception as e:
+                    logger.error(f"Failed to send student certificate email: {e}")
+
+
+                # ================================
+                # ✉️ Email to Admin (HTML)
+                # ================================
+                if admin_email:
+                    try:
+                        admin_context = {
+                            "name": student.name,
+                            "email": student.email,
+                            "course_name": course.course_name,
+                            "certificate_no": certificate.certificate_number,
+                        }
+
+                        admin_html = render_to_string("emails/certificate_admin.html", admin_context)
+
+                        send_mail(
+                            subject="📢 Student Course Completed & Certificate Approved",
+                            message="Your email client does not support HTML.",
+                            html_message=admin_html,
+                            from_email=f"Parach ICT Academy <{settings.DEFAULT_FROM_EMAIL}>",
+                            recipient_list=[admin_email],
+                            fail_silently=True,
+                        )
+
+                    except Exception as e:
+                        logger.error(f"Failed to send admin certificate approval email: {e}")
+
+
 
             except Exception as img_error:
                 logger.error(f"Certificate image generation failed: {str(img_error)}")

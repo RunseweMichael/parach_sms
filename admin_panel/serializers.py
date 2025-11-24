@@ -46,6 +46,9 @@ class StudentStatsSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     username = serializers.CharField()
     email = serializers.EmailField()
+    name = serializers.CharField()  # <-- added properly
+    phone_number = serializers.CharField(allow_blank=True, default="—")  # add phone_number
+    next_due_date = serializers.DateField(allow_null=True) 
     course_name = serializers.CharField(source='course.course_name', read_only=True)
     certificate_count = serializers.SerializerMethodField()
     registration_date = serializers.DateTimeField()

@@ -43,6 +43,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     amount_paid = serializers.DecimalField(max_digits=10, decimal_places=2, coerce_to_string=False, read_only=True)
     amount_owed = serializers.DecimalField(max_digits=10, decimal_places=2, coerce_to_string=False, read_only=True)
     password = serializers.CharField(write_only=True)
+    center = serializers.ChoiceField(choices=CustomUser.CENTER_CHOICES, required=True)
     course_name = serializers.CharField(source='course.course_name', read_only=True)
 
     class Meta:
@@ -51,7 +52,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             "id", "username", "email", "name", "gender", "birth_date",
             "phone_number", "address", "consent", "registration_date",
             "amount_paid", "amount_owed", "next_due_date", "is_active",
-            "course", "certificates", "password", "course_name",
+            "course", "certificates", "password", "course_name","center"
         ]
         extra_kwargs = {"username": {"required": False, "allow_blank": True}}
 
@@ -64,6 +65,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             course=validated_data.get('course'),
             birth_date=validated_data.get('birth_date'),
             phone_number=validated_data.get('phone_number'),
+            center=validated_data.get('center'),
             address=validated_data.get('address'),
             consent=validated_data.get('consent', False),
         )
@@ -82,8 +84,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 # -------------------------------
 class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for user management including staff roles"""
+    certificates = CertificateSerializer(many=True, read_only=True)
     course = CourseSerializer(read_only=True)
     course_name = serializers.CharField(source='course.course_name', read_only=True)
+    amount_owed = serializers.SerializerMethodField()
+    center = serializers.ChoiceField(choices=CustomUser.CENTER_CHOICES)
+    amount_paid = serializers.DecimalField(max_digits=10, decimal_places=2, coerce_to_string=False)
+
     
     class Meta:
         model = CustomUser
@@ -98,6 +105,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'address',
             'birth_date',
             'course',
+            'center',
             'course_name',
             'amount_paid',
             'amount_owed',
@@ -108,11 +116,27 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'is_superadmin',
             'registration_date',
             'discounted_price',
+            'certificates',
         ]
         read_only_fields = [
             'id',
             'registration_date',
+            'amount_owed',
         ]
+        
+    def get_amount_owed(self, obj):
+        discounted_price = obj.discounted_price if obj.discounted_price is not None else (obj.course.price if obj.course else 0)
+        total_paid = obj.amount_paid or 0
+        return float(max(0, discounted_price - total_paid))
+
+    def validate_email(self, value):
+        user = self.instance
+        qs = CustomUser.objects.filter(email=value)
+        if user:
+            qs = qs.exclude(pk=user.pk)
+        if qs.exists():
+            raise serializers.ValidationError("A user with that email already exists.")
+        return value
     
     def to_representation(self, instance):
         """Ensure boolean fields are properly serialized"""

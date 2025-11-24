@@ -77,3 +77,95 @@ class LessonProgress(models.Model):
         return f"{self.user.username} - {self.lesson.title} ({'Done' if self.completed else 'Pending'})"
 
     
+
+
+
+
+
+
+
+
+
+
+# Lets attempt the task part of the app
+class Task(models.Model):
+    lesson = models.ForeignKey(Lesson, related_name='tasks', on_delete=models.CASCADE)
+    question = models.TextField(default='')
+    options = models.TextField(default='[]')  # list of multiple-choice options
+    correct_answer = models.CharField(max_length=255, default='')
+    points = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Task"
+        verbose_name_plural = "Tasks"
+
+    def __str__(self):
+        return f"Task for {self.lesson.title}"
+
+
+
+class Question(models.Model):
+    task = models.ForeignKey(
+        Task,
+        related_name='questions',
+        on_delete=models.CASCADE
+    )
+    question_text = models.TextField()
+    order = models.PositiveIntegerField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.task.title} - Q{self.order or self.id}"
+
+
+
+
+
+class Choice(models.Model):
+    question = models.ForeignKey(
+        Question,
+        related_name='choices',
+        on_delete=models.CASCADE
+    )
+    choice_text = models.CharField(max_length=500)
+    is_correct = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.question} - {self.choice_text}"
+
+
+
+
+class TaskSubmission(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    task = models.ForeignKey(Task, related_name="submissions", on_delete=models.CASCADE)
+    selected_answer = models.CharField(max_length=255, default='')
+    is_correct = models.BooleanField(default=False)
+    score = models.IntegerField(default=0)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'task')
+        verbose_name = "Task Submission"
+
+    def __str__(self):
+        return f"{self.user.username} - {self.task.lesson.title} ({'Correct' if self.is_correct else 'Wrong'})"
+
+
+
+
+
+class TaskAnswer(models.Model):
+    submission = models.ForeignKey(
+        TaskSubmission,
+        related_name='answers',
+        on_delete=models.CASCADE
+    )
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    selected_choice = models.ForeignKey(Choice, on_delete=models.CASCADE)
+
+    def is_correct(self):
+        return self.selected_choice.is_correct

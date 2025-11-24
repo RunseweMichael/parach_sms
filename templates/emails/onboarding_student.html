@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" style="margin:0; padding:0;">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome Email</title>
+</head>
+
+<body style="background:#f5f7fa; margin:0; padding:0; font-family:Arial, sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0"
+                       style="background:white; border-radius:12px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+                    
+                    <!-- HEADER -->
+                    <tr>
+                        <td style="background:#2d6cdf; padding:25px; text-align:center;">
+                            
+                            {% if logo %}
+                            <img src="{{ logo }}" alt="Parach ICT Academy" width="120" style="margin-bottom:10px;">
+                            {% endif %}
+
+                            <h1 style="color:white; margin:0; font-size:28px; font-weight:600;">
+                                Parach ICT Academy
+                            </h1>
+                            <p style="color:#e8ecff; margin-top:5px; font-size:14px;">
+                                Empowering the Next Generation of Digital Creators
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- BODY -->
+                    <tr>
+                        <td style="padding:35px;">
+                            <h2 style="color:#333; font-size:22px; margin-bottom:10px;">
+                                Hello {{ name }},
+                            </h2>
+
+                            <p style="color:#555; font-size:15px; line-height:1.7;">
+                                🚀 <strong>Great news!</strong> Your first payment has been successfully received.
+                            </p>
+
+                            <p style="color:#555; font-size:15px; line-height:1.7;">
+                                Your student account is now fully activated. You're now officially part of 
+                                <strong>Parach ICT Academy</strong> — where innovators begin their journey.
+                            </p>
+
+                            <h3 style="color:#2d6cdf; margin-top:25px;">What happens next?</h3>
+                            <ul style="color:#555; font-size:15px; line-height:1.8; padding-left:20px;">
+                                <li>Your dashboard has been unlocked.</li>
+                                <li>You now have access to course materials and learning tools.</li>
+                                <li>Our support team is available anytime you need help.</li>
+                            </ul>
+
+                            <!-- BUTTON -->
+                            <div style="margin:30px 0; text-align:center;">
+                                <a href="{{ dashboard_url }}"
+                                   style="background:#2d6cdf; color:white; padding:12px 25px; 
+                                          font-size:16px; border-radius:6px; 
+                                          text-decoration:none; display:inline-block;">
+                                    Go to Dashboard
+                                </a>
+                            </div>
+
+                            <p style="color:#444; font-size:15px; margin-top:25px;">
+                                We're excited to have you with us and can't wait to see what you build!
+                            </p>
+
+                            <p style="margin-top:30px; color:#555; font-size:14px;">
+                                Warm regards,<br>
+                                <strong>Parach ICT Academy Team</strong>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- FOOTER -->
+                    <tr>
+                        <td style="background:#f0f3f8; padding:20px; text-align:center;">
+                            <p style="margin:0; font-size:13px; color:#7a7a7a;">
+                                © {{ year }} Parach ICT Academy — All Rights Reserved.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

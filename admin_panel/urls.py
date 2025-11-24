@@ -6,7 +6,8 @@ from .views import (
     NotificationViewSet,
     StudentManagementViewSet,
     export_data,
-    toggle_staff_role
+    toggle_staff_role,
+    notify_defaulters,
 )
 from . import views
 
@@ -21,4 +22,5 @@ urlpatterns = [
     path('export/', export_data, name='export-data'),
     path('toggle-staff-role/', toggle_staff_role, name='toggle-staff-role'),
     path('paginated-users/', views.paginated_users, name='paginated-users'),
+    path("notify_defaulters/", notify_defaulters, name="notify_defaulters"),
 ]

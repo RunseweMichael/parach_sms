@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,6 +41,7 @@ INSTALLED_APPS = [
     'students',
     'rest_framework',
     'rest_framework.authtoken',
+    # 'students.apps.StudentsConfig',
     'corsheaders',
     'courses',
     'enquiries',
@@ -107,7 +109,7 @@ ROOT_URLCONF = 'student_management_system.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -226,3 +228,14 @@ PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY', default='pk_test_xxx')
 PAYSTACK_BASE_URL = getattr(settings, "PAYSTACK_BASE_URL", "https://api.paystack.co")
 
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+
+
+TERMII_API_KEY = "TLUBlQJeuUcOiHWJdKHAIwWnQGcgLMKBHaQSevRZZHJIpmrsXZIzKSdcfSrtXI"
+TERMII_BASE_URL = "https://v3.api.termii.com"
+
+
+
+# Twilio credentials
+TWILIO_ACCOUNT_SID = "AC37239871e9274605675154393d34821f"
+TWILIO_AUTH_TOKEN = "7ec92e85f281a4ee3f3b34d6d00af7ed"
+TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886"

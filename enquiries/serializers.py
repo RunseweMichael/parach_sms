@@ -16,6 +16,11 @@ class EnquirySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Consent must be given to submit an enquiry.")
         return value
 
+    def validate_center(self, value):
+        if value and value not in [choice[0] for choice in Enquiry.CENTER_CHOICES]:
+            raise serializers.ValidationError("Invalid center selected.")
+        return value
+
     def validate_phone(self, value):
         """Basic validation for phone number format (optional)."""
         if not value.isdigit():
@@ -39,6 +44,7 @@ class EnquirySerializer(serializers.ModelSerializer):
             f"Email: {enquiry.email}\n"
             f"Phone: {enquiry.phone}\n"
             f"Gender: {enquiry.gender}\n"
+            f"Center: {enquiry.center}\n"
             f"Course: {enquiry.course}\n"
             f"Message: {enquiry.message}\n\n"
             f"Please log in to the admin panel to manage this enquiry."

@@ -28,6 +28,9 @@ from django.conf import settings
 from decimal import Decimal, InvalidOperation
 import uuid, json, requests
 from rest_framework import generics, permissions
+from django.http import FileResponse, Http404
+from .models import PaymentReceipt
+
 
 
 PAYSTACK_SECRET_KEY = settings.PAYSTACK_SECRET_KEY
@@ -355,11 +358,30 @@ def verify_payment(request, reference):
             "Content-Type": "application/json",
         }
 
-        response = requests.get(
-            f"{settings.PAYSTACK_BASE_URL}/transaction/verify/{reference}",
-            headers=headers,
-            timeout=10
-        )
+        # -----------------------------
+        # Retry logic for transient SSL/network errors
+        # -----------------------------
+        MAX_RETRIES = 3
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = requests.get(
+                    f"{settings.PAYSTACK_BASE_URL}/transaction/verify/{reference}",
+                    headers=headers,
+                    timeout=10
+                )
+                break  # success, exit retry loop
+            except requests.exceptions.SSLError as ssl_err:
+                if attempt < MAX_RETRIES - 1:
+                    print(f"⚠️ SSL error, retrying {attempt+1}/{MAX_RETRIES}...", ssl_err)
+                    import time; time.sleep(1)
+                else:
+                    raise
+            except requests.exceptions.RequestException as req_err:
+                if attempt < MAX_RETRIES - 1:
+                    print(f"⚠️ Network error, retrying {attempt+1}/{MAX_RETRIES}...", req_err)
+                    import time; time.sleep(1)
+                else:
+                    raise
 
         try:
             res_data = response.json() if response.content else {}
@@ -367,13 +389,13 @@ def verify_payment(request, reference):
             print("⚠️ Invalid JSON from Paystack:", response.text)
             res_data = {}
 
-        # ✅ Verify successful Paystack transaction
+        # -----------------------------
+        # If Paystack reports success
+        # -----------------------------
         if isinstance(res_data, dict) and res_data.get("data") and res_data["data"].get("status") == "success":
-            transaction_data = res_data["data"]
             transaction = Transaction.objects.get(reference=reference)
             user = transaction.user
 
-            # ✅ Prevent duplicate updates
             if transaction.status == "success":
                 return Response({
                     "message": "Payment already verified.",
@@ -382,43 +404,27 @@ def verify_payment(request, reference):
                     "status": transaction.status,
                 }, status=status.HTTP_200_OK)
 
-            # ✅ Parse metadata
+            # -----------------------------
+            # Your existing logic remains unchanged
+            # -----------------------------
             metadata = parse_metadata(transaction.metadata)
-            
-            # ✅ Get the correct discounted price
             course_price = Decimal(str(user.course.price))
-            
-            if metadata.get('discounted_price'):
-                discounted_price = Decimal(str(metadata.get('discounted_price')))
-            elif user.discounted_price:
-                discounted_price = Decimal(str(user.discounted_price))
-            else:
-                discounted_price = course_price
-            
+            discounted_price = Decimal(str(metadata.get('discounted_price') or user.discounted_price or course_price))
             discount_applied = Decimal(str(metadata.get('discount_applied', 0)))
 
-            # ✅ Update transaction status FIRST
             transaction.status = "success"
             transaction.paid_at = timezone.now()
             transaction.save()
 
-            # ✅ Compute total paid INCLUDING this transaction
-            total_paid = Transaction.objects.filter(
-                user=user, status='success'
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-
-            # ✅ Calculate amount_owed based on discounted_price
+            total_paid = Transaction.objects.filter(user=user, status='success').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
             user.amount_paid = total_paid
             user.amount_owed = max(Decimal("0.00"), discounted_price - total_paid)
             user.next_due_date = timezone.now().date() + timezone.timedelta(days=30)
-            
-            # ✅ Ensure discounted_price is saved to user model
+
             if not user.discounted_price:
                 user.discounted_price = discounted_price
-            
-            user.save()
 
-            # ✅ Generate receipt
+            user.save()
             generate_receipt_pdf(transaction)
 
             print(
@@ -452,10 +458,12 @@ def verify_payment(request, reference):
     except Transaction.DoesNotExist:
         return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print("🔥 Verification error:", str(e))
         import traceback
+        print("🔥 Verification error:", str(e))
         print(traceback.format_exc())
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 
 
@@ -520,77 +528,82 @@ def paystack_webhook(request):
         payload = json.loads(request.body)
         event = payload.get("event")
 
-        if event == "charge.success":
-            data = payload["data"]
-            reference = data["reference"]
+        if event != "charge.success":
+            # Ignore other events
+            print("Webhook ignored, event:", event)
+            return JsonResponse({"status": "ignored"}, status=200)
 
-            transaction = Transaction.objects.filter(reference=reference).first()
-            if not transaction:
-                print(f"⚠️ Transaction {reference} not found in database.")
-                return JsonResponse({"message": "Transaction not found."}, status=404)
+        data = payload.get("data", {})
+        reference = data.get("reference")
 
-            # ✅ Prevent duplicate processing
-            if transaction.status == "success":
-                print(f"⚠️ Transaction {reference} already processed.")
-                return JsonResponse({"message": "Transaction already processed."}, status=200)
+        if not reference:
+            print("Webhook missing reference")
+            return JsonResponse({"error": "Missing reference"}, status=400)
 
-            user = transaction.user
-            transaction_amount = Decimal(str(transaction.amount or 0))
-            course_price = Decimal(str(user.course.price or 0))
+        transaction = Transaction.objects.filter(reference=reference).first()
+        if not transaction:
+            print(f"⚠️ Transaction {reference} not found in database.")
+            return JsonResponse({"message": "Transaction not found."}, status=404)
 
-            # ✅ Parse metadata
-            metadata = parse_metadata(transaction.metadata)
-            
-            # ✅ Get the correct discounted price
-            if metadata.get('discounted_price'):
-                discounted_price = Decimal(str(metadata.get('discounted_price')))
-            elif user.discounted_price:
-                discounted_price = Decimal(str(user.discounted_price))
-            else:
-                discounted_price = course_price
-                
-            discount_applied = Decimal(str(metadata.get('discount_applied', 0)))
+        # Prevent duplicate processing
+        if transaction.status == "success":
+            print(f"⚠️ Transaction {reference} already processed.")
+            return JsonResponse({"message": "Transaction already processed."}, status=200)
 
-            # ✅ Update transaction status FIRST
-            transaction.status = "success"
-            transaction.paid_at = timezone.now()
-            transaction.save()
+        user = transaction.user
+        course_price = Decimal(str(user.course.price or 0))
 
-            # ✅ Compute total paid INCLUDING this transaction
-            total_paid = Transaction.objects.filter(
-                user=user, status='success'
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        # Parse metadata
+        metadata = parse_metadata(transaction.metadata)
 
-            # ✅ Update user balances
-            user.amount_paid = total_paid
-            user.amount_owed = max(Decimal("0.00"), discounted_price - total_paid)
-            user.next_due_date = timezone.now().date() + timezone.timedelta(days=30)
-            
-            # ✅ Ensure discounted_price is saved to user model
-            if not user.discounted_price and discounted_price != course_price:
-                user.discounted_price = discounted_price
-            
-            user.save()
+        # Determine discounted price
+        if metadata.get('discounted_price'):
+            discounted_price = Decimal(str(metadata.get('discounted_price')))
+        elif user.discounted_price:
+            discounted_price = Decimal(str(user.discounted_price))
+        else:
+            discounted_price = course_price
 
-            # ✅ Generate receipt
-            generate_receipt_pdf(transaction)
+        discount_applied = Decimal(str(metadata.get('discount_applied', 0)))
 
-            print(
-                f"🔔 Webhook: {user.email} paid ₦{transaction_amount} | "
-                f"Total Paid: ₦{total_paid} | "
-                f"Course Price: ₦{course_price} | "
-                f"Discounted Price: ₦{discounted_price} | "
-                f"Discount: ₦{discount_applied} | "
-                f"Owed: ₦{user.amount_owed}"
-            )
+        # ✅ Update transaction: amount, status, paid_at
+        transaction.amount = Decimal(str(data.get("amount", 0))) / 100  # Paystack sends amount in Kobo
+        transaction.status = "success"
+        transaction.paid_at = timezone.now()
+        transaction.save(update_fields=['amount', 'status', 'paid_at'])
+
+        # ✅ Recalculate total paid and amount owed
+        total_paid = Transaction.objects.filter(user=user, status='success').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        user.amount_paid = total_paid
+        user.amount_owed = max(Decimal("0.00"), discounted_price - total_paid)
+        user.next_due_date = timezone.now().date() + timezone.timedelta(days=30)
+
+        if not user.discounted_price:
+            user.discounted_price = discounted_price
+
+        user.save(update_fields=['amount_paid', 'amount_owed', 'next_due_date', 'discounted_price'])
+
+        # ✅ Generate receipt
+        generate_receipt_pdf(transaction)
+
+        print(
+            f"🔔 Webhook processed: {user.email} paid ₦{transaction.amount} | "
+            f"Total Paid: ₦{total_paid} | "
+            f"Course Price: ₦{course_price} | "
+            f"Discounted Price: ₦{discounted_price} | "
+            f"Discount: ₦{discount_applied} | "
+            f"Owed: ₦{user.amount_owed}"
+        )
 
         return JsonResponse({"status": "success"}, status=200)
 
     except Exception as e:
-        print("🔥 Webhook error:", str(e))
         import traceback
+        print("🔥 Webhook error:", str(e))
         print(traceback.format_exc())
         return JsonResponse({"error": str(e)}, status=500)
+
+
 
 
 # ==========================================================
@@ -624,6 +637,19 @@ class StudentTransactionListView(generics.ListAPIView):
 
 
 
+def download_receipt(request, reference):
+    try:
+        receipt = PaymentReceipt.objects.get(transaction__reference=reference)
+        # full path to the PDF file
+        file_path = receipt.pdf_file.path
 
+        return FileResponse(
+            open(file_path, 'rb'),
+            as_attachment=True,  # force download
+            filename=f"{reference}_receipt.pdf"
+        )
+
+    except PaymentReceipt.DoesNotExist:
+        raise Http404("Receipt not found")
 
 

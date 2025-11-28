@@ -61,7 +61,7 @@ class EnquiryViewSet(viewsets.ModelViewSet):
 
                   <!-- Button -->
                   <p style="text-align:center; margin:30px 0;">
-                    <a href="https://parachictacademy.com.ng" 
+                    <a href="https://parachictacademy.com.ng/wp-content/uploads/2025/07/Tech-schools-in-Ibadan_Parach-Course-List.pdf" 
                        style="background:#3b82f6; color:white; text-decoration:none; padding:12px 24px; border-radius:6px; display:inline-block; font-weight:bold;">
                        View Courses
                     </a>

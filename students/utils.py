@@ -27,7 +27,7 @@ def send_otp_email(user, otp):
         <div style="max-width: 600px; margin: auto; background-color: #ffffff; border-radius: 10px; padding: 30px; box-shadow: 0 4px 8px rgba(0,0,0,0.05);">
           <h2 style="color: #4a4a4a; text-align: center;">Account Verification</h2>
           <p style="font-size: 16px; color: #333333;">
-            Hello <strong>{user.username or user.email}</strong>,
+            Hello <strong>{user.name or user.email}</strong>,
           </p>
           <p style="font-size: 15px; color: #555;">
             Thank you for using our service! Please use the verification code below to complete your process.

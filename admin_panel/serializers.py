@@ -46,6 +46,7 @@ class StudentStatsSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     username = serializers.CharField()
     email = serializers.EmailField()
+    address = serializers.CharField(allow_blank=True, default="—")
     name = serializers.CharField()  # <-- added properly
     phone_number = serializers.CharField(allow_blank=True, default="—")  # add phone_number
     next_due_date = serializers.DateField(allow_null=True) 

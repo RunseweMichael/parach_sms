@@ -41,13 +41,13 @@ INSTALLED_APPS = [
     'students',
     'rest_framework',
     'rest_framework.authtoken',
-    # 'students.apps.StudentsConfig',
     'corsheaders',
     'courses',
     'enquiries',
     'certificates',
     'admin_panel',
     'payments',
+    'internships',
 ]
 
 
@@ -230,7 +230,7 @@ PAYSTACK_BASE_URL = getattr(settings, "PAYSTACK_BASE_URL", "https://api.paystack
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 
 
-TERMII_API_KEY = "TLUBlQJeuUcOiHWJdKHAIwWnQGcgLMKBHaQSevRZZHJIpmrsXZIzKSdcfSrtXI"
+TERMII_API_KEY = "TLSRFdFLVgifWBQwMrTdQzykLCqAGKKhTOObsuiGYYusaKQuCOjjLwccOJmATm"
 TERMII_BASE_URL = "https://v3.api.termii.com"
 
 

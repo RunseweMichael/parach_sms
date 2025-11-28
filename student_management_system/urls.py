@@ -17,6 +17,7 @@ urlpatterns = [
     path('api/certificates/', include(('certificates.urls', 'certificates'), namespace='certificates')),
     path('api/admin-panel/', include('admin_panel.urls')),
     path('api/payments/', include('payments.urls')),
+    path("api/", include("internships.urls")),
 ]
 
 if settings.DEBUG:

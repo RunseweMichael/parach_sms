@@ -8,8 +8,7 @@ from .permissions import IsSuperAdmin, IsStaffOrSuperAdmin
 from rest_framework.pagination import PageNumberPagination
 from students.serializers import UserProfileSerializer
 from django.contrib.auth import get_user_model
-from admin_panel.notifications import send_whatsapp_message
-from .notifications import format_phone_number, send_whatsapp_message
+from .notifications import format_phone_number
 from datetime import timedelta, datetime
 from .models import AdminActivity, Notification
 from .serializers import (

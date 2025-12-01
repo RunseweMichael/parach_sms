@@ -18,6 +18,7 @@ urlpatterns = [
     path('api/admin-panel/', include('admin_panel.urls')),
     path('api/payments/', include('payments.urls')),
     path("api/", include("internships.urls")),
+    path('api/tasks/', include(('tasks.urls', 'tasks'), namespace='tasks')),
 ]
 
 if settings.DEBUG:

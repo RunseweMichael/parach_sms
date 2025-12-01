@@ -654,7 +654,8 @@ from django.conf import settings
 from students.models import CustomUser as Student
 
 TERMII_API_KEY = settings.TERMII_API_KEY
-TERMII_BASE_URL = settings.TERMII_BASE_URL  # e.g., "https://v3.api.termii.com"
+TERMII_BASE_URL = settings.TERMII_BASE_URL
+
 
 def normalize_phone(number):
     """Convert phone number to international format (Nigeria example)."""
@@ -667,14 +668,39 @@ def normalize_phone(number):
         number = number[1:]
     return f"+{number}"
 
+
+def send_whatsapp_message(phone, message):
+    """
+    Send WhatsApp message using Termii.
+    """
+    payload = {
+        "phone_number": phone,
+        "message": message,
+        "message_type": "whatsapp",
+        "api_key": TERMII_API_KEY,
+    }
+
+    try:
+        response = requests.post(
+            f"{TERMII_BASE_URL}/api/whatsapp/send",
+            json=payload,
+            timeout=10
+        )
+        return response.status_code, response.json()
+    except Exception as e:
+        return None, {"error": str(e)}
+
+
+
 @csrf_exempt
 def notify_defaulters(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=400)
 
+    # Parse JSON & remove duplicates
     try:
         data = json.loads(request.body)
-        student_ids = data.get("student_ids", [])
+        student_ids = list(set(data.get("student_ids", [])))
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -682,53 +708,249 @@ def notify_defaulters(request):
         return JsonResponse({"error": "No students selected"}, status=400)
 
     students = Student.objects.filter(id__in=student_ids)
-
     if not students.exists():
         return JsonResponse({"error": "No students found"}, status=400)
 
     results = []
+    used_phone_numbers = set()
 
     for student in students:
         phone_number = normalize_phone(student.phone_number)
+
         if not phone_number:
-            results.append({"student": student.email, "status": "skipped", "reason": "No valid phone number"})
+            results.append({
+                "student": student.email,
+                "status": "skipped",
+                "reason": "No valid phone number"
+            })
             continue
 
-        print("Sending SMS to:", phone_number)  # DEBUG: confirm number
+        # Prevent duplicate phone numbers
+        if phone_number in used_phone_numbers:
+            results.append({
+                "student": student.email,
+                "status": "skipped",
+                "reason": "Phone number already notified"
+            })
+            continue
 
-        next_due = student.next_due_date.strftime("%d/%m/%Y") if student.next_due_date else "N/A"
-        message = (
-            f"Dear {student.name or 'Student'}, your payment of ₦{student.amount_owed:,.2f} "
-            f"is overdue. Please settle your dues by {next_due}. ✅ Thank you for being part of Parach Academy!"
+        used_phone_numbers.add(phone_number)
+        print("📤 Sending messages to:", phone_number)
+
+        next_due = (
+            student.next_due_date.strftime("%d/%m/%Y")
+            if student.next_due_date else "N/A"
         )
 
-        payload = {
-            "to": f"{phone_number}",
+        message = (
+            f"Dear {student.name or 'Student'}, your payment of N{student.amount_owed:,.0f} "
+            f"is overdue. Kindly settle by {next_due}. Parach Academy."
+        )
+
+        # -----------------------
+        # SEND SMS
+        # -----------------------
+        sms_payload = {
+            "to": phone_number,
             "from": "ParachICT",
             "sms": message,
             "type": "plain",
-            "channel": "generic",  # safer than 'dnd'
+            "channel": "generic",
             "api_key": TERMII_API_KEY
         }
 
         try:
-            response = requests.post(f"{TERMII_BASE_URL}/api/sms/send", json=payload, timeout=10)
-            resp_data = response.json()
-            print("Termii response:", resp_data)  # DEBUG: see API feedback
+            sms_response = requests.post(
+                f"{TERMII_BASE_URL}/api/sms/send",
+                json=sms_payload,
+                timeout=10
+            )
+            sms_data = sms_response.json()
+        except Exception as e:
+            sms_data = {"error": str(e)}
 
-            if response.status_code == 200 and (resp_data.get("messageId") or resp_data.get("status") == "success"):
-                results.append({"student": student.email, "status": "success", "termii_response": resp_data})
-            else:
-                results.append({"student": student.email, "status": "failed", "termii_response": resp_data})
+        # -----------------------
+        # SEND WHATSAPP
+        # -----------------------
+        wa_status, wa_data = send_whatsapp_message(phone_number, message)
 
-        except requests.RequestException as e:
-            results.append({"student": student.email, "status": "failed", "error": str(e)})
-            print(f"Error sending SMS to {student.email}: {e}")
+        # -----------------------
+        # FINAL RESULT
+        # -----------------------
+        results.append({
+            "student": student.email,
+            "phone": phone_number,
+            "sms_response": sms_data,
+            "whatsapp_response": wa_data
+        })
 
-    if not results:
-        return JsonResponse({"error": "No valid phone numbers found"}, status=400)
+        print("SMS Payload:", sms_payload)
+        print("WhatsApp Payload:", {"phone_number": phone_number, "message": message})
 
     return JsonResponse({
-        "message": f"Notifications processed for {len(results)} students",
+        "message": f"Processed {len(results)} students (unique phones: {len(used_phone_numbers)})",
         "results": results
     })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # only sms fucntionality
+# import json
+# import requests
+# from django.http import JsonResponse
+# from django.views.decorators.csrf import csrf_exempt
+# from django.conf import settings
+# from students.models import CustomUser as Student
+
+# TERMII_API_KEY = settings.TERMII_API_KEY
+# TERMII_BASE_URL = settings.TERMII_BASE_URL
+
+
+# def normalize_phone(number):
+#     """Convert phone number to international format (Nigeria example)."""
+#     if not number:
+#         return None
+#     number = number.strip().replace(" ", "")
+#     if number.startswith("0"):
+#         number = "234" + number[1:]
+#     elif number.startswith("+"):
+#         number = number[1:]
+#     return f"+{number}"
+
+
+# @csrf_exempt
+# def notify_defaulters(request):
+#     if request.method != "POST":
+#         return JsonResponse({"error": "POST method required"}, status=400)
+
+#     # ---------------------------------------------
+#     # 1️⃣ Parse JSON and remove duplicate IDs
+#     # ---------------------------------------------
+#     try:
+#         data = json.loads(request.body)
+#         student_ids = list(set(data.get("student_ids", [])))  # REMOVE DUPLICATE STUDENT IDs
+#     except json.JSONDecodeError:
+#         return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+#     if not student_ids:
+#         return JsonResponse({"error": "No students selected"}, status=400)
+
+#     students = Student.objects.filter(id__in=student_ids)
+
+#     if not students.exists():
+#         return JsonResponse({"error": "No students found"}, status=400)
+
+#     results = []
+
+#     # ---------------------------------------------
+#     # 2️⃣ Prevent duplicate phone numbers from receiving SMS
+#     # ---------------------------------------------
+#     used_phone_numbers = set()
+
+#     for student in students:
+#         phone_number = normalize_phone(student.phone_number)
+
+#         if not phone_number:
+#             results.append({
+#                 "student": student.email,
+#                 "status": "skipped",
+#                 "reason": "No valid phone number"
+#             })
+#             continue
+
+#         # ---------------------------------------------
+#         # 3️⃣ Unique phone protection
+#         # Only send to each phone number ONCE
+#         # ---------------------------------------------
+#         if phone_number in used_phone_numbers:
+#             results.append({
+#                 "student": student.email,
+#                 "status": "skipped",
+#                 "reason": "Phone number already notified"
+#             })
+#             continue
+
+#         used_phone_numbers.add(phone_number)
+
+#         print("📤 Sending SMS to:", phone_number)
+
+#         next_due = (
+#             student.next_due_date.strftime("%d/%m/%Y")
+#             if student.next_due_date else "N/A"
+#         )
+
+#         # ---------------------------------------------
+#         # 4️⃣ SHORTENED MESSAGE - Keeps it under 160 characters
+#         # Current length: ~145 characters (fits in 1 SMS)
+#         # ---------------------------------------------
+#         message = (
+#             f"Dear {student.name or 'Student'}, your payment of N{student.amount_owed:,.0f} "
+#             f"is overdue. Kindly settle by {next_due}. Parach Academy."
+#         )
+
+#         # Print message length for debugging
+#         print(f"Message length: {len(message)} characters")
+#         print(f"Message: {message}")
+
+#         payload = {
+#             "to": phone_number,
+#             "from": "ParachICT",
+#             "sms": message,
+#             "type": "plain",
+#             "channel": "generic",
+#             "api_key": TERMII_API_KEY
+#         }
+
+#         try:
+#             response = requests.post(
+#                 f"{TERMII_BASE_URL}/api/sms/send",
+#                 json=payload,
+#                 timeout=10
+#             )
+#             resp_data = response.json()
+#             print("Termii response:", resp_data)
+
+#             if response.status_code == 200 and (
+#                 resp_data.get("messageId") or resp_data.get("status") == "success"
+#             ):
+#                 results.append({
+#                     "student": student.email,
+#                     "status": "success",
+#                     "phone": phone_number,
+#                     "message_length": len(message),
+#                     "termii_response": resp_data
+#                 })
+#             else:
+#                 results.append({
+#                     "student": student.email,
+#                     "status": "failed",
+#                     "phone": phone_number,
+#                     "termii_response": resp_data
+#                 })
+
+#         except requests.RequestException as e:
+#             results.append({
+#                 "student": student.email,
+#                 "status": "failed",
+#                 "phone": phone_number,
+#                 "error": str(e)
+#             })
+#             print(f"❌ Error sending SMS to {student.email}: {e}")
+
+#     return JsonResponse({
+#         "message": f"Processed {len(results)} students (unique phones: {len(used_phone_numbers)})",
+#         "results": results
+#     })

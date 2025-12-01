@@ -25,7 +25,7 @@ pdfmetrics.registerFont(TTFont('DejaVuSans', font_path))
 class ColoredBackgroundDocTemplate(SimpleDocTemplate):
     def __init__(self, filename, **kwargs):
         super().__init__(filename, **kwargs)
-        self.page_background_color = colors.HexColor("#001F5B")  # deep blue  ##001F5B
+        self.page_background_color = colors.HexColor("#FFFFFF")
 
     def beforePage(self):
         c: canvas.Canvas = self.canv
@@ -45,16 +45,16 @@ def generate_receipt_pdf(transaction):
     # -----------------------------
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle("title", parent=styles["Heading1"], alignment=0, fontSize=40,
-                                 textColor=colors.white, fontName="DejaVuSans", spaceAfter=5)
+                                 textColor=colors.black, fontName="DejaVuSans", spaceAfter=5)
     subtitle_style = ParagraphStyle("subtitle", parent=styles["Heading2"], alignment=0, fontSize=20,
-                                    textColor=colors.white, fontName="DejaVuSans", spaceAfter=10)
+                                    textColor=colors.black, fontName="DejaVuSans", spaceAfter=10)
     section_header_style = ParagraphStyle("section_header", parent=styles["Heading2"], fontSize=12,
-                                          textColor=colors.white, fontName="DejaVuSans",
+                                          textColor=colors.black, fontName="DejaVuSans",
                                           spaceBefore=12, spaceAfter=8)
     label_style = ParagraphStyle("label", parent=styles["Normal"], fontName="DejaVuSans", fontSize=11,
-                                 textColor=colors.white, spaceAfter=4)
+                                 textColor=colors.black, spaceAfter=4)
     footer_style = ParagraphStyle("footer", parent=styles["Normal"], alignment=1, fontName="DejaVuSans",
-                                  fontSize=10, textColor=colors.white, spaceBefore=25)
+                                  fontSize=10, textColor=colors.black, spaceBefore=25)
 
     # -----------------------------
     # Document
@@ -70,49 +70,59 @@ def generate_receipt_pdf(transaction):
 
     elements = []
 
-    # -----------------------------
-    # Download logo
-    # -----------------------------
-    logo_url = "https://parachictacademy.com.ng/wp-content/uploads/2019/08/Parach-computers-ibadan-logo-1-e1565984209812.png"
+    
+    
+    logo_path = os.path.join(settings.MEDIA_ROOT, "logo.jpeg")
 
-    try:
-        response = requests.get(logo_url, headers={"User-Agent": "Mozilla/5.0"})
-        if response.status_code == 200:
-            logo_path = os.path.join(settings.MEDIA_ROOT, "logo_temp.png")
-            with open(logo_path, "wb") as f:
-                f.write(response.content)
+    company_address = Paragraph("""
+    <b>Parach ICT Academy,</b><br/>
+    Beside Odusote Bookshop,<br/>
+    Samonda, Ibadan,<br/>
+    Oyo State, Nigeria.<br/>
+    +234 705 524 7562<br/>
+    www.parachictacademy.com.ng
+    """, ParagraphStyle(
+        "address",
+        parent=styles["Normal"],
+        fontName="DejaVuSans",
+        fontSize=10,
+        alignment=2,  # RIGHT ALIGN
+        leading=14,
+    ))
 
-            # -----------------------------
-            # Logo + ICT Academy
-            # -----------------------------
-            logo_img = Image(logo_path, width=200, height=80)
-            logo_text_table = Table(
-                [
-                    [logo_img],  # row 0: logo
-                    [Paragraph("ICT Academy", subtitle_style)]  # row 1: ICT Academy directly under
-                ],
-                colWidths=[200],
-                hAlign='LEFT'
-            )
-            logo_text_table.setStyle(TableStyle([
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#001F5B"))
-            ]))
-            elements.append(logo_text_table)
-            elements.append(Spacer(1, 15))
-        else:
-            print("Logo download failed:", response.status_code)
-    except Exception as e:
-        print("Logo download error:", e)
+    if os.path.exists(logo_path):
+        logo_img = Image(logo_path, width=100, height=30)
+
+        header_table = Table(
+            [
+                [logo_img, company_address]
+            ],
+            colWidths=[150, 300],   # adjust as needed
+            hAlign='LEFT',
+            vAlign='TOP'
+        )
+
+        header_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (0, 0), "TOP"),          # LOGO TOP
+            ("VALIGN", (1, 0), (1, 0), "TOP"),          # ADDRESS TOP
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ]))
+
+        elements.append(header_table)
+        elements.append(Spacer(1, 20))
+    else:
+        print("⚠️ Logo not found at:", logo_path)
+
+
 
     # -----------------------------
     # Header Text
     # -----------------------------
-    elements.append(HRFlowable(width="80%", thickness=1, color=colors.white, spaceBefore=8, spaceAfter=25))
     elements.append(Paragraph("<b>OFFICIAL PAYMENT RECEIPT</b>", section_header_style))
     elements.append(Spacer(1, 10))
     elements.append(Paragraph(
@@ -153,8 +163,8 @@ def generate_receipt_pdf(transaction):
 
     table = Table(data, colWidths=[180, 320], hAlign='CENTER')
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0B3954")),  # Student Name row blue
-        ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ffffff")), 
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
         ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#AAAAAA")),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#DDDDDD")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),

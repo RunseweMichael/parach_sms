@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'admin_panel',
     'payments',
     'internships',
+    'tasks',
 ]
 
 
@@ -230,7 +231,8 @@ PAYSTACK_BASE_URL = getattr(settings, "PAYSTACK_BASE_URL", "https://api.paystack
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 
 
-TERMII_API_KEY = "TLSRFdFLVgifWBQwMrTdQzykLCqAGKKhTOObsuiGYYusaKQuCOjjLwccOJmATm"
+TERMII_API_KEY = "TLSRFdFLVgifWBQwMrTdQzykLCqAGKKhTOObsuiGYYusaKQuCOjjLwccOJmATm"    #main account
+# TERMII_API_KEY = "TLUBlQJeuUcOiHWJdKHAIwWnQGcgLMKBHaQSevRZZHJIpmrsXZIzKSdcfSrtXI"    #test account
 TERMII_BASE_URL = "https://v3.api.termii.com"
 
 

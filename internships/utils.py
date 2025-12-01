@@ -13,69 +13,88 @@ def generate_internship_pdf(request_obj):
     p = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
 
-    # =====================================================================
-    #  TOP BANNER
-    # =====================================================================
-    p.setFillColor(colors.HexColor("#0B3D91"))
-    p.rect(0, height - 0.8 * inch, width, 0.8 * inch, fill=True, stroke=False)
+    # Top banner
+    BANNER_HEIGHT = 2 * inch
+    p.setFillColor(colors.HexColor("#FFFFFF"))
+    p.rect(0, height - BANNER_HEIGHT, width, BANNER_HEIGHT, fill=True, stroke=False)
 
-    # =====================================================================
-    #  LOGO IN BANNER
-    # =====================================================================
+    # Define address configuration first
+    p.setFont("Helvetica", 11)
+    address_lines = [
+        "Parach ICT Academy,",
+        "Beside Odusote Bookshop,",
+        "Samonda, Ibadan,",
+        "Oyo State, Nigeria.",
+        "+234 705 524 7562",
+        "www.parachictacademy.com.ng"
+    ]
+    
+    line_height = 13
+    # Calculate total height of address block
+    total_address_height = len(address_lines) * line_height
+    
+    # Position address to start vertically centered in banner
+    address_x = 5.5 * inch  # Position for address text
+    address_y = height - BANNER_HEIGHT + (BANNER_HEIGHT + total_address_height) / 2 - line_height
+
+    # Left: Logo - aligned with first line of address
     try:
-        logo_path = os.path.join(settings.BASE_DIR, "static/images/parach.png")
-
+        logo_path = os.path.join(settings.MEDIA_ROOT, "logo.jpeg")
         if os.path.exists(logo_path):
             logo_image = ImageReader(logo_path)
-
-            LOGO_WIDTH = 0.55 * inch
-            LOGO_HEIGHT = 0.55 * inch
-
-            logo_y = height - 0.8 * inch + (0.8 * inch - LOGO_HEIGHT) / 2
-
+            LOGO_WIDTH = 1.5 * inch
+            LOGO_HEIGHT = 1.5 * inch
+            
+            # Position logo so its vertical center aligns with "Parach ICT Academy" text
+            logo_x = 0.9 * inch
+            # Align logo center with the first line of address (Parach ICT Academy)
+            logo_y = address_y - (LOGO_HEIGHT / 2) + (line_height / 2)
+            
             p.drawImage(
                 logo_image,
-                0.4 * inch,
+                logo_x,
                 logo_y,
                 width=LOGO_WIDTH,
                 height=LOGO_HEIGHT,
                 preserveAspectRatio=True,
-                mask="auto",
+                mask='auto'
             )
+        else:
+            print("⚠️ Logo not found:", logo_path)
     except Exception as e:
         print("Error loading logo:", repr(e))
 
-    # =====================================================================
-    #  HEADER TEXT
-    # =====================================================================
-    p.setFont("Helvetica-Bold", 20)
-    p.setFillColor(colors.white)
-    p.drawString(1.45 * inch, height - 0.52 * inch, "Parach ICT Academy")
+    # Draw address lines
+    p.setFillColor(colors.black)
+    for line in address_lines:
+        p.drawString(address_x, address_y, line)
+        address_y -= line_height
 
     # =====================================================================
-    #  UNDERLINE TITLE
+    #  UNDERLINE TITLE (with increased spacing from banner)
     # =====================================================================
     p.setFillColor(colors.black)
     p.setFont("Helvetica-Bold", 16)
-    p.drawString(1 * inch, height - 1.5 * inch, "Internship Offer Letter")
+    title_y = height - BANNER_HEIGHT - 0.1 * inch  # Increased space below banner
+    p.drawString(1 * inch, title_y, "Internship Offer Letter")
     p.setStrokeColor(colors.lightgrey)
     p.setLineWidth(1)
-    p.line(1 * inch, height - 1.55 * inch, width - 1 * inch, height - 1.55 * inch)
+    p.line(1 * inch, title_y - 0.05 * inch, width - 1 * inch, title_y - 0.05 * inch)
 
     # =====================================================================
     #  DATE & RECIPIENT
     # =====================================================================
     today = datetime.date.today().strftime("%B %d, %Y")
     p.setFont("Helvetica", 12)
-    p.drawString(1 * inch, height - 2 * inch, f"Date: {today}")
+    p.drawString(1 * inch, title_y - 0.5 * inch, f"Date: {today}")
 
-    p.drawString(1 * inch, height - 2.5 * inch, f"To: {request_obj.student_name}")
-    p.drawString(1 * inch, height - 2.8 * inch, f"Email: {request_obj.student_email}")
+    p.drawString(1 * inch, title_y - 1 * inch, f"To: {request_obj.student_name}")
+    p.drawString(1 * inch, title_y - 1.3 * inch, f"Email: {request_obj.student_email}")
 
     # =====================================================================
     #  BODY CONTENT
     # =====================================================================
-    body_y = height - 3.5 * inch
+    body_y = title_y - 2 * inch
     line_spacing = 16
 
     intro = [
@@ -83,8 +102,8 @@ def generate_internship_pdf(request_obj):
         "",
         "We are pleased to extend this official internship offer to you from Parach ICT Academy.",
         f"Your internship will begin on {request_obj.preferred_start_date} and run for a duration of {request_obj.duration}.",
-        "This program will expose you to hands-on experience in software development,",
-        "productivity tools, team collaboration, and other essential IT skills.",
+        "This program will expose you to hands-on experience in productivity tools,",
+        "team collaboration, and other essential IT skills.",
     ]
 
     expectations = [
@@ -99,7 +118,7 @@ def generate_internship_pdf(request_obj):
     policies = [
         "",
         "Key Guidelines:",
-        "   1. The internship may be unpaid or stipended, as discussed.",
+        "   1. The internship is unpaid.",
         "   2. Professional conduct and adherence to academy policies are required.",
         "   3. Timely submission of tasks and weekly reports is expected.",
     ]
@@ -112,9 +131,8 @@ def generate_internship_pdf(request_obj):
         "",
         "Warm regards,",
         "",
-        "Parach ICT Academy Team",
-        "Website: www.parachictacademy.com.ng",
-        "Phone: +234 705 524 7562",
+        "Busayo,",
+        "Manager.",
     ]
 
     # ---- Write body text ----
@@ -126,20 +144,6 @@ def generate_internship_pdf(request_obj):
             p.drawString(1 * inch, y, line)
             y -= line_spacing
         y -= line_spacing
-
-    # =====================================================================
-    #  FOOTER BAR
-    # =====================================================================
-    p.setFillColor(colors.HexColor("#0B3D91"))
-    p.rect(0, 0, width, 0.5 * inch, fill=True, stroke=False)
-
-    p.setFont("Helvetica", 10)
-    p.setFillColor(colors.white)
-    p.drawCentredString(
-        width / 2,
-        0.2 * inch,
-        "Parach ICT Academy • Empowering the Next Generation of Tech Innovators"
-    )
 
     p.showPage()
     p.save()

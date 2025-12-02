@@ -10,15 +10,13 @@ import logging
 from django.conf import settings
 from django.core.mail import send_mail
 
-
-
 logger = logging.getLogger(__name__)
 
 
 class CertificateViewSet(viewsets.ModelViewSet):
     queryset = Certificate.objects.all().select_related("student", "course")
     serializer_class = CertificateSerializer
-    permission_classes = [IsAuthenticated]  # Changed from IsAdminUser for testing
+    permission_classes = [IsAuthenticated]
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -28,6 +26,13 @@ class CertificateViewSet(viewsets.ModelViewSet):
         """
         try:
             certificate = self.get_object()
+        
+            # ✅ Check if certificate is obsolete
+            if certificate.is_obsolete:
+                return Response(
+                    {"error": "Cannot approve an obsolete certificate. This certificate is for a course the student no longer takes."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
             # Check if already approved
             if certificate.is_approved:
@@ -67,28 +72,21 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 certificate.is_approved = True
                 certificate.save()
 
-                # I want to send an email notification to both the admin and student for future reference purposes.
-                # ---------------------------------------------------------
-                # ✅ Send Email Notifications After Certificate Approval
-                # ---------------------------------------------------------
-
+                # Send Email Notifications
                 student = certificate.student
                 course = certificate.course
                 admin_email = getattr(settings, "ADMIN_EMAIL", None)
 
-                # ✉️ Email to Student
-                from django.template.loader import render_to_string
-                from django.utils import timezone
-
-                # ================================
                 # ✉️ Email to Student (HTML)
-                # ================================
                 try:
+                    from django.template.loader import render_to_string
+                    from django.utils import timezone
+                    
                     context = {
                         "name": student.name or student.email,
                         "course_name": course.course_name,
                         "year": timezone.now().year,
-                        "dashboard_url": "https://yourdomain.com/dashboard",   # UPDATE WITH ACTUAL DASHBOARD URL
+                        "dashboard_url": "https://yourdomain.com/dashboard",
                         "logo": "https://parachictacademy.com.ng/wp-content/uploads/2019/08/Parach-computers-ibadan-logo-1-e1565984209812.png"
                     }
 
@@ -106,12 +104,11 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 except Exception as e:
                     logger.error(f"Failed to send student certificate email: {e}")
 
-
-                # ================================
                 # ✉️ Email to Admin (HTML)
-                # ================================
                 if admin_email:
                     try:
+                        from django.template.loader import render_to_string
+                        
                         admin_context = {
                             "name": student.name,
                             "email": student.email,
@@ -132,8 +129,6 @@ class CertificateViewSet(viewsets.ModelViewSet):
 
                     except Exception as e:
                         logger.error(f"Failed to send admin certificate approval email: {e}")
-
-
 
             except Exception as img_error:
                 logger.error(f"Certificate image generation failed: {str(img_error)}")
@@ -167,11 +162,20 @@ class CertificateViewSet(viewsets.ModelViewSet):
             )
 
     def get_queryset(self):
-        queryset = Certificate.objects.all()  # start with all certificates
+        """
+        Filter certificates based on user role and query params.
+        By default, hide obsolete certificates unless explicitly requested.
+        """
+        queryset = Certificate.objects.all()
 
-        # Only filter by student if request is coming from the API (not admin)
-        if self.request.user.is_staff is False:
+        # Filter by student if not staff
+        if not self.request.user.is_staff:
             queryset = queryset.filter(student=self.request.user)
+
+        # ✅ Filter obsolete certificates (default: hide them)
+        show_obsolete = self.request.query_params.get("show_obsolete", "true")
+        if show_obsolete.lower() not in ["true", "1"]:
+            queryset = queryset.filter(is_obsolete=False)
 
         # Apply is_approved query param filter
         is_approved = self.request.query_params.get("is_approved")
@@ -182,4 +186,23 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(is_approved=False)
 
         return queryset
-
+    
+    @action(detail=False, methods=['get'])
+    def pending_approval(self, request):
+        """
+        Get all certificates pending approval (excluding obsolete ones).
+        Admin-only endpoint.
+        """
+        if not request.user.is_staff:
+            return Response(
+                {"error": "Admin access required"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        pending_certs = Certificate.objects.filter(
+            is_approved=False,
+            is_obsolete=False
+        ).select_related('student', 'course')
+        
+        serializer = self.get_serializer(pending_certs, many=True)
+        return Response(serializer.data)

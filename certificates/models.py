@@ -10,12 +10,28 @@ import uuid
 
 class Certificate(models.Model):
     id = models.AutoField(primary_key=True)
-    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="certificates")
-    course = models.ForeignKey("courses.Courses", on_delete=models.SET_NULL, null=True, blank=True)
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name="certificates"
+    )
+    course = models.ForeignKey(
+        "courses.Courses", 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
     issue_date = models.DateField(default=timezone.now)
     is_approved = models.BooleanField(default=False)
     certificate_file = models.FileField(upload_to="certificates/", blank=True, null=True)
     certificate_number = models.CharField(max_length=50, blank=True, unique=True)
+    
+    # ✅ NEW: Track if certificate is obsolete (course changed)
+    is_obsolete = models.BooleanField(default=False)
+    obsolete_reason = models.TextField(blank=True, null=True)
+    
+    # ✅ NEW: Track when certificate was made obsolete
+    obsolete_date = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self.certificate_number:
@@ -25,4 +41,8 @@ class Certificate(models.Model):
     def __str__(self):
         student_name = getattr(self.student, "name", None) or getattr(self.student, "username", "Unknown Student")
         course_name = getattr(self.course, "course_name", "No Course")
-        return f"{student_name} - {course_name}"
+        status = " [OBSOLETE]" if self.is_obsolete else ""
+        return f"{student_name} - {course_name}{status}"
+    
+    class Meta:
+        ordering = ['-issue_date']

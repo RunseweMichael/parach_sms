@@ -8,24 +8,19 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authentication import TokenAuthentication
-from rest_framework.decorators import action
-from .serializers import EmailAuthTokenSerializer
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import action, api_view, permission_classes
+from decimal import Decimal
 from .models import EmailOTP, CustomUser
 from .serializers import (
     SendOTPSerializer, VerifyOTPSerializer,
     UserRegistrationSerializer, UserProfileSerializer, SendPasswordResetOTPSerializer,
-    ResetPasswordSerializer
+    ResetPasswordSerializer, AdminUserSerializer, EmailAuthTokenSerializer
 )
 from .utils import send_otp_email
-from .serializers import AdminUserSerializer
 from admin_panel.permissions import IsSuperAdmin, IsStaffOrSuperAdmin
 
 User = get_user_model()
 
-# -------------------------------
-# User CRUD via ViewSet
-# -------------------------------
 class UserViewSet(viewsets.ModelViewSet):
     """
     Handles:
@@ -48,16 +43,91 @@ class UserViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
 
     def update(self, request, *args, **kwargs):
+        """
+        Handle user updates with special course change logic
+        """
         partial = kwargs.pop('partial', False)
         user = self.get_object()
+        
+        # Check if course is being changed
+        new_course_id = request.data.get('course')
+        course_changed = False
+        old_course = None
+        new_course = None
+        
+        if new_course_id and user.course_id != int(new_course_id):
+            course_changed = True
+            old_course = user.course
+            
+            # Import here to avoid circular dependency
+            from courses.models import Courses
+            try:
+                new_course = Courses.objects.get(id=new_course_id)
+            except Courses.DoesNotExist:
+                return Response(
+                    {"error": "Selected course does not exist."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # BUSINESS RULE: Reset payment when course changes
+            user.course = new_course
+            user.amount_paid = Decimal('0.00')
+            user.amount_owed = new_course.price
+            user.discounted_price = None  # Reset any discounts
+            user.next_due_date = None
+            user.dashboard_locked = False
+            
+            # Save course change first
+            user.save(update_fields=[
+                'course', 'amount_paid', 'amount_owed', 
+                'discounted_price', 'next_due_date', 'dashboard_locked'
+            ])
+            
+            # ✅ Handle Certificate Generation/Update
+            from certificates.models import Certificate
+            
+            # Mark old certificates as obsolete
+            if old_course:
+                old_certificates = Certificate.objects.filter(
+                    student=user,
+                    course=old_course,
+                    is_obsolete=False
+                )
+                for cert in old_certificates:
+                    cert.is_obsolete = True
+                    cert.obsolete_reason = f"Course changed from {old_course.course_name} to {new_course.course_name}"
+                    cert.obsolete_date = timezone.now()
+                    cert.save()
+                    print(f"🗂️ Marked certificate {cert.certificate_number} as obsolete")
+            
+            # Create new certificate for the new course
+            new_certificate = Certificate.objects.create(
+                student=user,
+                course=new_course,
+                issue_date=timezone.now().date(),
+                is_approved=False  # Admin needs to approve
+            )
+            print(f"📜 Created new certificate {new_certificate.certificate_number} for {new_course.course_name}")
+            
+            # Log the course change
+            print(f"📝 Course changed for {user.email}: {old_course.course_name if old_course else 'None'} → {new_course.course_name}")
+        
+        # Process other field updates
         serializer = self.get_serializer(user, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        # Add notification to response if course changed
+        response_data = serializer.data
+        if course_changed:
+            response_data['warning'] = (
+                f"Course changed. Payment reset to ₦0. "
+                f"New course price: ₦{new_course.price:,.2f}. "
+                f"A new certificate has been created and requires approval."
+            )
+        
+        return Response(response_data, status=status.HTTP_200_OK)
 
-    # -----------------------------------------
-    # 1️⃣ Register new user
-    # -----------------------------------------
     def create(self, request, *args, **kwargs):
         serializer = UserRegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -66,28 +136,26 @@ class UserViewSet(viewsets.ModelViewSet):
         otp = EmailOTP.generate_otp(user, purpose="email_verification")
         send_otp_email(user, otp)
 
-        return Response({"message": "User registered successfully. Check your email for OTP."},
-                        status=status.HTTP_201_CREATED)
+        return Response(
+            {"message": "User registered successfully. Check your email for OTP."},
+            status=status.HTTP_201_CREATED
+        )
 
-    # -----------------------------------------
-    # 2️⃣ Logged-in user profile
-    # -----------------------------------------
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def me(self, request):
         serializer = UserProfileSerializer(request.user)
         return Response(serializer.data)
 
-    # -----------------------------------------
-    # 3️⃣ Promote or demote staff
-    # -----------------------------------------
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, IsAdminUser])
     def toggle_staff_role(self, request):
         user_id = request.data.get("user_id")
         is_staff_admin = request.data.get("is_staff_admin")
 
         if user_id is None or is_staff_admin is None:
-            return Response({"error": "user_id and is_staff_admin are required."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "user_id and is_staff_admin are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             user = User.objects.get(id=user_id)
@@ -96,11 +164,10 @@ class UserViewSet(viewsets.ModelViewSet):
 
         user.is_staff_admin = is_staff_admin
         user.save()
-        return Response({"message": f"User {'promoted' if is_staff_admin else 'demoted'} successfully."})
+        return Response({
+            "message": f"User {'promoted' if is_staff_admin else 'demoted'} successfully."
+        })
 
-    # -----------------------------------------
-    # 4️⃣ List staff / non-staff users
-    # -----------------------------------------
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, IsAdminUser])
     def staff_list(self, request):
         staff = User.objects.filter(is_staff_admin=True)
@@ -114,13 +181,10 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-# -------------------------------
-# Send OTP
-# -------------------------------
+# Keep all other views unchanged
 class SendOTPView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-
 
     def post(self, request):
         serializer = SendOTPSerializer(data=request.data)
@@ -138,9 +202,6 @@ class SendOTPView(APIView):
         return Response({"message": "OTP sent successfully."})
 
 
-# -------------------------------
-# Verify OTP
-# -------------------------------
 class VerifyOTPView(APIView):
     permission_classes = [AllowAny]
 
@@ -167,9 +228,6 @@ class VerifyOTPView(APIView):
         return Response({"message": "OTP verified, user activated successfully"})
 
 
-# -------------------------------
-# Resend OTP
-# -------------------------------
 class ResendOTPView(APIView):
     permission_classes = [AllowAny]
 
@@ -186,27 +244,27 @@ class ResendOTPView(APIView):
         return Response({"message": "New OTP sent successfully."})
 
 
-# -------------------------------
-# Custom Auth Token (Login)
-# -------------------------------
 class CustomAuthToken(ObtainAuthToken):
     serializer_class = EmailAuthTokenSerializer
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data,
-                                           context={'request': request})
+        serializer = self.serializer_class(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
         if not user.is_active:
-            return Response({'error': 'User is not active, please verify your email'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {'error': 'User is not active, please verify your email'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         token, _ = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key, 'user_id': user.id, 'username': user.username})
+        return Response({
+            'token': token.key,
+            'user_id': user.id,
+            'username': user.username
+        })
 
 
-# -------------------------------
-# User Profile
-# -------------------------------
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [TokenAuthentication]
@@ -224,9 +282,6 @@ class UserProfileView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# -------------------------------
-# Logout
-# -------------------------------
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [TokenAuthentication]
@@ -250,11 +305,8 @@ class SendPasswordResetOTPView(APIView):
         except CustomUser.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Clean old OTPs and generate new
         EmailOTP.clean_expired_otps()
         otp = EmailOTP.generate_otp(user, purpose='password_reset')
-
-        # Send email
         send_otp_email(user, otp)
 
         return Response({"message": "Password reset OTP sent to your email."})
@@ -269,24 +321,26 @@ class ResetPasswordView(APIView):
         new_password = request.data.get("new_password")
 
         if not all([email, otp, new_password]):
-            return Response({"error": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "All fields are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
-            # find OTP record that matches the email and code
             otp_record = EmailOTP.objects.get(user__email=email, code=otp, is_used=False)
         except EmailOTP.DoesNotExist:
-            return Response({"error": "Invalid or expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid or expired OTP."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # check expiry if your model supports it
         if otp_record.is_expired():
             return Response({"error": "OTP expired."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # reset user password
         user = otp_record.user
         user.set_password(new_password)
         user.save()
 
-        # mark OTP as used
         otp_record.is_used = True
         otp_record.save()
 
@@ -304,7 +358,6 @@ def student_dashboard(request):
                        "Please pay at least 50% of your course fee to regain access."
         }, status=403)
 
-    # normal data if not locked
     return Response({
         "locked": False,
         "course": user.course.course_name if user.course else None,
@@ -322,6 +375,7 @@ def all_users(request):
     serializer = AdminUserSerializer(users, many=True)
     return Response(serializer.data)
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_user(request):
@@ -331,9 +385,7 @@ def current_user(request):
 
 
 class UserManagementViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for managing all users (for admin staff management)
-    """
+    """ViewSet for managing all users (for admin staff management)"""
     queryset = CustomUser.objects.all()
     serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -355,15 +407,3 @@ class UserManagementViewSet(viewsets.ReadOnlyModelViewSet):
         non_staff = CustomUser.objects.filter(is_staff_admin=False, is_superadmin=False)
         serializer = self.get_serializer(non_staff, many=True)
         return Response(serializer.data)
-
-
-
-
-
-
-
-
-
-
-
-

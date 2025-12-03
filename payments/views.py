@@ -404,9 +404,7 @@ def verify_payment(request, reference):
                     "status": transaction.status,
                 }, status=status.HTTP_200_OK)
 
-            # -----------------------------
-            # Your existing logic remains unchanged
-            # -----------------------------
+           
             metadata = parse_metadata(transaction.metadata)
             course_price = Decimal(str(user.course.price))
             discounted_price = Decimal(str(metadata.get('discounted_price') or user.discounted_price or course_price))

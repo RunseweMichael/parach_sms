@@ -642,10 +642,6 @@ User = get_user_model()
 
 
 
-
-
-
-
 import json
 import requests
 from django.http import JsonResponse

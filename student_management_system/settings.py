@@ -88,6 +88,7 @@ CORS_ALLOWED_ORIGINS = [
     # Change this to the frontend URL
     "http://localhost:5173",       
     "http://localhost:5174",
+    "http://student-management-system-one-sandy.vercel.app",
 ]
 
 # Enable cookies

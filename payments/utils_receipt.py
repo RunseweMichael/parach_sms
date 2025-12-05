@@ -73,6 +73,7 @@ def generate_receipt_pdf(transaction):
     
     
     logo_path = os.path.join(settings.MEDIA_ROOT, "logo.jpeg")
+    paid_stamp_path = os.path.join(settings.MEDIA_ROOT, "paid_stamp.png")
 
     company_address = Paragraph("""
     <b>Parach ICT Academy,</b><br/>
@@ -85,38 +86,76 @@ def generate_receipt_pdf(transaction):
         "address",
         parent=styles["Normal"],
         fontName="DejaVuSans",
-        fontSize=10,
-        alignment=2,  # RIGHT ALIGN
+        fontSize=9,
+        alignment=0,  # LEFT ALIGN
         leading=14,
     ))
 
+    # Left side: Logo + Address stacked vertically
+    left_content = []
     if os.path.exists(logo_path):
         logo_img = Image(logo_path, width=100, height=30)
-
-        header_table = Table(
-            [
-                [logo_img, company_address]
-            ],
-            colWidths=[150, 300],   # adjust as needed
-            hAlign='LEFT',
-            vAlign='TOP'
-        )
-
-        header_table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (0, 0), "TOP"),          # LOGO TOP
-            ("VALIGN", (1, 0), (1, 0), "TOP"),          # ADDRESS TOP
-            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-        ]))
-
-        elements.append(header_table)
-        elements.append(Spacer(1, 20))
+        left_content.append([logo_img])
+        left_content.append([company_address])
     else:
         print("⚠️ Logo not found at:", logo_path)
+        left_content.append([company_address])
+
+    left_table = Table(left_content, colWidths=[150])
+    left_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+
+    # Right side: "RECEIPT" text + Paid stamp stacked vertically
+    receipt_text = Paragraph("<b>RECEIPT</b>", ParagraphStyle(
+        "receipt_title",
+        parent=styles["Heading1"],
+        fontName="DejaVuSans",
+        fontSize=24,
+        alignment=2,  # RIGHT ALIGN
+        textColor=colors.HexColor("#1a56db"),
+        spaceAfter=5,
+    ))
+
+    right_content = [[receipt_text]]
+    if os.path.exists(paid_stamp_path):
+        paid_stamp_img = Image(paid_stamp_path, width=80, height=80)
+        right_content.append([paid_stamp_img])
+    else:
+        print("⚠️ Paid stamp not found at:", paid_stamp_path)
+
+    right_table = Table(right_content, colWidths=[150])
+    right_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+
+    # Main header table combining left and right
+    header_table = Table(
+        [[left_table, right_table]],
+        colWidths=[250, 250],
+        hAlign='LEFT',
+    )   
+
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+
+    elements.append(header_table)
+    elements.append(Spacer(1, 20))
 
 
 

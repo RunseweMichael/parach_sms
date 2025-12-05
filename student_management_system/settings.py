@@ -88,8 +88,11 @@ CORS_ALLOWED_ORIGINS = [
     # Change this to the frontend URL
     "http://localhost:5173",       
     "http://localhost:5174",
-    "http://student-management-system-one-sandy.vercel.app",
+    "https://student-management-system-one-sandy.vercel.app",
 ]
+
+CORS_ALLOW_ALL_HEADERS = True
+CORS_ALLOW_ALL_METHODS = True
 
 # Enable cookies
 CORS_ALLOW_CREDENTIALS = True

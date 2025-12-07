@@ -8,7 +8,7 @@ class TaskSubmission(models.Model):
     module_id = models.IntegerField()
     module_name = models.CharField(max_length=200, blank=True, null=True)
     week_id = models.IntegerField()
-    answers = models.TextField(default="{}")  # Store JSON as text
+    answers = models.TextField(default="{}")
     correct_count = models.IntegerField(default=0)
     total_questions = models.IntegerField(default=0)
     percentage = models.FloatField(default=0)

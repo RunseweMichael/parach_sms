@@ -134,6 +134,9 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
+        user.next_due_date = timezone.now().date()
+        user.save(update_fields=['next_due_date'])
+
         otp = EmailOTP.generate_otp(user, purpose="email_verification")
         send_otp_email(user, otp)
 
@@ -237,9 +240,6 @@ class ResendOTPView(APIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
         user = User.objects.get(email=email)
-
-        user.next_due_date = timezone.now().date()
-        user.save(update_fields=['next_due_date'])
 
         EmailOTP.clean_expired_otps()
         otp = EmailOTP.generate_otp(user=user, purpose='email_verification')

@@ -328,8 +328,7 @@ def initialize_payment(request):
             'amount': int(amount_to_pay * 100),  # Kobo
             'reference': reference,
             'callback_url': f"{settings.FRONTEND_URL}/payment?reference={reference}",
-            'metadata': transaction.metadata,  
-    
+            'metadata': transaction.metadata,
         }
 
         res = requests.post(f'{settings.PAYSTACK_BASE_URL}/transaction/initialize', headers=headers, json=payload)

@@ -18,7 +18,6 @@ ENV/
 *.log
 *.pot
 *.pyc
-db.sqlite3
 media/
 
 # If you collect static files into STATIC_ROOT

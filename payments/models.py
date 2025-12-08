@@ -48,6 +48,7 @@ class Transaction(models.Model):
     channel = models.CharField(max_length=50, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     fees = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    course = models.ForeignKey('courses.Courses', on_delete=models.SET_NULL, null=True, blank=True)
 
     # Paystack customer details
     customer_code = models.CharField(max_length=100, blank=True)

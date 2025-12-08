@@ -67,14 +67,16 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def transactions(self, request, pk=None):
         user = self.get_object()
-        transactions = Transaction.objects.filter(user=user)
+        # ✅ Filter transactions by current course
+        transactions = Transaction.objects.filter(user=user, course=user.course)
         serializer = TransactionSerializer(transactions, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
     def payment_summary(self, request, pk=None):
         user = self.get_object()
-        transactions = Transaction.objects.filter(user=user)
+        # ✅ Filter by current course
+        transactions = Transaction.objects.filter(user=user, course=user.course)
         total_paid = transactions.filter(status='success').aggregate(total=Sum('amount'))['total'] or 0
         pending = transactions.filter(status='pending').count()
         failed = transactions.filter(status='failed').count()
@@ -123,10 +125,12 @@ def get_balance(request):
 
     course_price = Decimal(str(user.course.price))
     
-    # Compute total paid dynamically
-    total_paid = Transaction.objects.filter(user=user, status='success').aggregate(
-        total=Sum('amount')
-    )['total'] or Decimal('0.00')
+    # ✅ Compute total paid dynamically - ONLY for current course
+    total_paid = Transaction.objects.filter(
+        user=user, 
+        status='success',
+        course=user.course  # ✅ Filter by current course
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
     # ✅ Get current discounted price (accumulated from all coupons)
     if user.discounted_price:
@@ -211,9 +215,14 @@ def initialize_payment(request):
                 return Response({'error': 'Coupon code does not exist.'}, status=400)
 
         # --------------------------
-        # Remaining balance
+        # Remaining balance - ✅ Only count payments for current course
         # --------------------------
-        total_paid = user.amount_paid or Decimal('0.00')
+        total_paid = Transaction.objects.filter(
+            user=user, 
+            status='success',
+            course=user.course  # ✅ Filter by current course
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
         remaining = discounted_price - total_paid
 
         if remaining <= 0:
@@ -244,11 +253,12 @@ def initialize_payment(request):
             )
 
         # --------------------------
-        # Create transaction
+        # Create transaction - ✅ Include course
         # --------------------------
         reference = f"TXN_{uuid.uuid4().hex[:12].upper()}"
         transaction = Transaction.objects.create(
             user=user,
+            course=user.course,  # ✅ Track which course this payment is for
             reference=reference,
             email=user.email,
             amount=amount_to_pay,
@@ -256,6 +266,7 @@ def initialize_payment(request):
             metadata={
                 'user_id': user.id,
                 'user_name': user.name,
+                'course_id': user.course.id,  # ✅ Store course ID
                 'course_name': user.course.course_name,
                 'coupon_code': coupon_code if coupon_code else None,
                 'discount_applied': float(discount_applied),
@@ -273,9 +284,15 @@ def initialize_payment(request):
             transaction.paid_at = timezone.now()
             transaction.save()
 
-            # ✅ Add discount to amount_paid
-            user.amount_paid = (user.amount_paid or Decimal("0.00")) + discount_applied
-            user.amount_owed = max(Decimal("0.00"), discounted_price - user.amount_paid)
+            # ✅ Recalculate based on current course payments only
+            total_paid_now = Transaction.objects.filter(
+                user=user, 
+                status='success',
+                course=user.course
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            
+            user.amount_paid = total_paid_now
+            user.amount_owed = max(Decimal("0.00"), discounted_price - total_paid_now)
             user.next_due_date = timezone.now().date() + timezone.timedelta(days=30)
             user.save()
 
@@ -347,7 +364,7 @@ def initialize_payment(request):
 
 
 # ==========================================================
-# VERIFY PAYMENT (same logic as before)
+# VERIFY PAYMENT
 # ==========================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -358,9 +375,7 @@ def verify_payment(request, reference):
             "Content-Type": "application/json",
         }
 
-        # -----------------------------
         # Retry logic for transient SSL/network errors
-        # -----------------------------
         MAX_RETRIES = 3
         for attempt in range(MAX_RETRIES):
             try:
@@ -369,7 +384,7 @@ def verify_payment(request, reference):
                     headers=headers,
                     timeout=10
                 )
-                break  # success, exit retry loop
+                break
             except requests.exceptions.SSLError as ssl_err:
                 if attempt < MAX_RETRIES - 1:
                     print(f"⚠️ SSL error, retrying {attempt+1}/{MAX_RETRIES}...", ssl_err)
@@ -389,9 +404,7 @@ def verify_payment(request, reference):
             print("⚠️ Invalid JSON from Paystack:", response.text)
             res_data = {}
 
-        # -----------------------------
         # If Paystack reports success
-        # -----------------------------
         if isinstance(res_data, dict) and res_data.get("data") and res_data["data"].get("status") == "success":
             transaction = Transaction.objects.get(reference=reference)
             user = transaction.user
@@ -404,7 +417,6 @@ def verify_payment(request, reference):
                     "status": transaction.status,
                 }, status=status.HTTP_200_OK)
 
-           
             metadata = parse_metadata(transaction.metadata)
             course_price = Decimal(str(user.course.price))
             discounted_price = Decimal(str(metadata.get('discounted_price') or user.discounted_price or course_price))
@@ -414,7 +426,13 @@ def verify_payment(request, reference):
             transaction.paid_at = timezone.now()
             transaction.save()
 
-            total_paid = Transaction.objects.filter(user=user, status='success').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            # ✅ Recalculate based on current course payments only
+            total_paid = Transaction.objects.filter(
+                user=user, 
+                status='success',
+                course=user.course
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            
             user.amount_paid = total_paid
             user.amount_owed = max(Decimal("0.00"), discounted_price - total_paid)
             user.next_due_date = timezone.now().date() + timezone.timedelta(days=30)
@@ -460,9 +478,6 @@ def verify_payment(request, reference):
         print("🔥 Verification error:", str(e))
         print(traceback.format_exc())
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-
 
 
 # ==========================================================
@@ -527,7 +542,6 @@ def paystack_webhook(request):
         event = payload.get("event")
 
         if event != "charge.success":
-            # Ignore other events
             print("Webhook ignored, event:", event)
             return JsonResponse({"status": "ignored"}, status=200)
 
@@ -543,7 +557,6 @@ def paystack_webhook(request):
             print(f"⚠️ Transaction {reference} not found in database.")
             return JsonResponse({"message": "Transaction not found."}, status=404)
 
-        # Prevent duplicate processing
         if transaction.status == "success":
             print(f"⚠️ Transaction {reference} already processed.")
             return JsonResponse({"message": "Transaction already processed."}, status=200)
@@ -551,10 +564,8 @@ def paystack_webhook(request):
         user = transaction.user
         course_price = Decimal(str(user.course.price or 0))
 
-        # Parse metadata
         metadata = parse_metadata(transaction.metadata)
 
-        # Determine discounted price
         if metadata.get('discounted_price'):
             discounted_price = Decimal(str(metadata.get('discounted_price')))
         elif user.discounted_price:
@@ -564,14 +575,18 @@ def paystack_webhook(request):
 
         discount_applied = Decimal(str(metadata.get('discount_applied', 0)))
 
-        # ✅ Update transaction: amount, status, paid_at
-        transaction.amount = Decimal(str(data.get("amount", 0))) / 100  # Paystack sends amount in Kobo
+        transaction.amount = Decimal(str(data.get("amount", 0))) / 100
         transaction.status = "success"
         transaction.paid_at = timezone.now()
         transaction.save(update_fields=['amount', 'status', 'paid_at'])
 
-        # ✅ Recalculate total paid and amount owed
-        total_paid = Transaction.objects.filter(user=user, status='success').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        # ✅ Recalculate based on current course payments only
+        total_paid = Transaction.objects.filter(
+            user=user, 
+            status='success',
+            course=user.course
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
         user.amount_paid = total_paid
         user.amount_owed = max(Decimal("0.00"), discounted_price - total_paid)
         user.next_due_date = timezone.now().date() + timezone.timedelta(days=30)
@@ -581,7 +596,6 @@ def paystack_webhook(request):
 
         user.save(update_fields=['amount_paid', 'amount_owed', 'next_due_date', 'discounted_price'])
 
-        # ✅ Generate receipt
         generate_receipt_pdf(transaction)
 
         print(
@@ -602,8 +616,6 @@ def paystack_webhook(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-
-
 # ==========================================================
 # TRANSACTION VIEWSET
 # ==========================================================
@@ -616,13 +628,14 @@ class TransactionViewSet(viewsets.ModelViewSet):
         queryset = Transaction.objects.all()
 
         if not self.request.user.is_staff:
-            queryset = queryset.filter(user=self.request.user)
+            # ✅ Filter by current course for students
+            queryset = queryset.filter(user=self.request.user, course=self.request.user.course)
 
         status_filter = self.request.query_params.get('status')
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        return queryset.select_related('user').prefetch_related('payment_items')
+        return queryset.select_related('user', 'course').prefetch_related('payment_items')
 
 
 class StudentTransactionListView(generics.ListAPIView):
@@ -631,23 +644,20 @@ class StudentTransactionListView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Transaction.objects.filter(user=user).order_by('-paid_at')
-
+        # ✅ Only show transactions for current course
+        return Transaction.objects.filter(user=user, course=user.course).order_by('-paid_at')
 
 
 def download_receipt(request, reference):
     try:
         receipt = PaymentReceipt.objects.get(transaction__reference=reference)
-        # full path to the PDF file
         file_path = receipt.pdf_file.path
 
         return FileResponse(
             open(file_path, 'rb'),
-            as_attachment=True,  # force download
+            as_attachment=True,
             filename=f"{reference}_receipt.pdf"
         )
 
     except PaymentReceipt.DoesNotExist:
         raise Http404("Receipt not found")
-
-

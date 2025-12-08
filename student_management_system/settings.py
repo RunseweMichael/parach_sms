@@ -24,9 +24,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-)@4nowt0*vvb196nup3=crut!jkq+p4@)s4gb2vv=ng$+=t!p*'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = [
+    "parachsms.vercel.app",
+    "student-management-system-one-sandy.vercel.app",
     'parachsms.pythonanywhere.com',
     'localhost',
     '127.0.0.1',
@@ -90,7 +92,8 @@ LOGGING = {
 
 CORS_ALLOWED_ORIGINS = [
     # Change this to the frontend URL
-    "http://localhost:5173",       
+    "http://localhost:5173",
+    "https://parachsms.vercel.app",
     "http://localhost:5174",
     "https://student-management-system-one-sandy.vercel.app",
 ]
@@ -101,6 +104,7 @@ CORS_ALLOW_ALL_METHODS = True
 # Enable cookies
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
+    "https://parachsms.vercel.app",
     "https://student-management-system-one-sandy.vercel.app",
 ]
 
@@ -240,7 +244,7 @@ PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY', default='sk_test_xxx')
 PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY', default='pk_test_xxx')
 PAYSTACK_BASE_URL = getattr(settings, "PAYSTACK_BASE_URL", "https://api.paystack.co")
 
-FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+FRONTEND_URL = config('FRONTEND_URL', default='https://parachsms.vercel.app')
 
 
 TERMII_API_KEY = "TLSRFdFLVgifWBQwMrTdQzykLCqAGKKhTOObsuiGYYusaKQuCOjjLwccOJmATm"    #main account

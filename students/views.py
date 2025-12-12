@@ -134,7 +134,8 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        user.next_due_date = timezone.now().date()
+        registration_date = timezone.now().date()
+        user.next_due_date = registration_date - timedelta(days=1)
         user.save(update_fields=['next_due_date'])
 
         otp = EmailOTP.generate_otp(user, purpose="email_verification")
@@ -411,3 +412,5 @@ class UserManagementViewSet(viewsets.ReadOnlyModelViewSet):
         non_staff = CustomUser.objects.filter(is_staff_admin=False, is_superadmin=False)
         serializer = self.get_serializer(non_staff, many=True)
         return Response(serializer.data)
+
+        

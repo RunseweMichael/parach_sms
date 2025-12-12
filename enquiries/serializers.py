@@ -67,7 +67,7 @@ class EnquirySerializer(serializers.ModelSerializer):
                     {enquiry.message}
                 </blockquote>
                 <p style="margin-top:20px;">
-                    <a href="https://your-admin-url.com" style="background:#0066cc; color:white; 
+                    <a href="parach-sms.vercel.app/login" style="background:#0066cc; color:white; 
                     padding:10px 15px; text-decoration:none; border-radius:5px;">Open Admin Panel</a>
                 </p>
                 <hr>

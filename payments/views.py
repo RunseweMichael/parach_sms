@@ -294,7 +294,8 @@ def initialize_payment(request):
             user.amount_paid = total_paid_now
             user.amount_owed = max(Decimal("0.00"), discounted_price - total_paid_now)
             user.next_due_date = timezone.now().date() + timezone.timedelta(days=30)
-            user.save()
+            user.has_used_coupon = True
+            user.save(update_fields=['has_used_coupon', 'amount_paid', 'amount_owed', 'next_due_date'])
 
             # Generate receipt
             generate_receipt_pdf(transaction)
@@ -339,6 +340,9 @@ def initialize_payment(request):
             if coupon:
                 coupon.times_used += 1
                 coupon.save()
+
+                user.has_used_coupon = True    # ✅ SET FLAG
+                user.save(update_fields=['has_used_coupon'])
 
             remaining_balance = float(remaining - amount_to_pay)
 

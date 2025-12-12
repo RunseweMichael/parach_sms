@@ -61,6 +61,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     next_due_date = models.DateField(blank=True, null=True)
     dashboard_locked = models.BooleanField(default=False)
     discounted_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    has_used_coupon = models.BooleanField(default=False)
 
     # Required permission fields
     is_active = models.BooleanField(default=True)

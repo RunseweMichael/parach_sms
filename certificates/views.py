@@ -10,6 +10,7 @@ import logging
 from django.conf import settings
 from django.core.mail import send_mail
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +27,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
         """
         try:
             certificate = self.get_object()
-        
+    
             # ✅ Check if certificate is obsolete
             if certificate.is_obsolete:
                 return Response(
@@ -34,26 +35,42 @@ class CertificateViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
+            # ✅ NEW: Check if student still owes money
+            student = certificate.student
+            if student:
+                discounted_price = student.discounted_price if student.discounted_price is not None else (student.course.price if student.course else 0)
+                total_paid = student.amount_paid or 0
+                amount_owed = max(0, discounted_price - total_paid)
+            
+                if amount_owed > 0:
+                    return Response(
+                        {
+                            "error": f"Cannot approve certificate. Student still owes ₦{amount_owed:,.2f}. Full payment is required before certificate approval.",
+                            "amount_owed": float(amount_owed)
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+    
             # Check if already approved
             if certificate.is_approved:
                 return Response(
                     {"message": "Certificate is already approved."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        
+    
             # Validate required data
             if not certificate.student:
                 return Response(
                     {"error": "Certificate has no associated student."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        
+    
             if not certificate.course:
                 return Response(
                     {"error": "Certificate has no associated course."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        
+    
             course = certificate.course
             logger.info(f"Generating certificate for student: {certificate.student.username}")
 
@@ -81,12 +98,12 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 try:
                     from django.template.loader import render_to_string
                     from django.utils import timezone
-                    
+                
                     context = {
                         "name": student.name or student.email,
                         "course_name": course.course_name,
                         "year": timezone.now().year,
-                        "dashboard_url": "https://yourdomain.com/dashboard",
+                        "dashboard_url": "https://parach-sms.vercel.app/student/dashboard",
                         "logo": "https://parachictacademy.com.ng/wp-content/uploads/2019/08/Parach-computers-ibadan-logo-1-e1565984209812.png"
                     }
 
@@ -108,7 +125,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 if admin_email:
                     try:
                         from django.template.loader import render_to_string
-                        
+                    
                         admin_context = {
                             "name": student.name,
                             "email": student.email,
@@ -206,3 +223,46 @@ class CertificateViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(pending_certs, many=True)
         return Response(serializer.data)
+
+
+
+
+
+
+
+
+
+
+# students/views.py
+from rest_framework.response import Response
+from rest_framework.decorators import api_view
+from students.models import CustomUser as Student
+from .models import Certificate
+
+# certificates/views.py
+
+from rest_framework.response import Response
+from rest_framework.decorators import api_view
+from .models import Certificate
+
+@api_view(["GET"])
+def verify_certificate(request):
+    cert_no = request.query_params.get("certificate_number")
+
+    if not cert_no:
+        return Response({"error": "Certificate number is required"}, status=400)
+
+    certificate = Certificate.objects.filter(certificate_number=cert_no).select_related("student", "course").first()
+
+    if not certificate:
+        return Response({"valid": False}, status=200)
+
+    return Response({
+        "valid": True,
+        "name": certificate.student.name or certificate.student.email,
+        "course": certificate.course.course_name if certificate.course else None,
+        "certificate_number": certificate.certificate_number,
+        "issued_on": certificate.issue_date,
+    })
+
+

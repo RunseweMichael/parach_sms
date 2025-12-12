@@ -27,6 +27,8 @@ SECRET_KEY = 'django-insecure-)@4nowt0*vvb196nup3=crut!jkq+p4@)s4gb2vv=ng$+=t!p*
 DEBUG = True
 
 ALLOWED_HOSTS = [
+    "mike96.pythonanywhere.com",
+    "parach-sms.vercel.app",
     "parachsms.vercel.app",
     "student-management-system-one-sandy.vercel.app",
     'parachsms.pythonanywhere.com',
@@ -55,6 +57,7 @@ INSTALLED_APPS = [
     'payments',
     'internships',
     'tasks',
+    'notifications',
 ]
 
 
@@ -92,6 +95,7 @@ LOGGING = {
 
 CORS_ALLOWED_ORIGINS = [
     # Change this to the frontend URL
+    "https://parach-sms.vercel.app",
     "http://localhost:5173",
     "https://parachsms.vercel.app",
     "http://localhost:5174",
@@ -104,6 +108,7 @@ CORS_ALLOW_ALL_METHODS = True
 # Enable cookies
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
+    "https://parach-sms.vercel.app",
     "https://parachsms.vercel.app",
     "https://student-management-system-one-sandy.vercel.app",
 ]
@@ -207,11 +212,14 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'runsewemichael39@gmail.com'
-EMAIL_HOST_PASSWORD = 'jrmoiytqjvwmhejg'  # use an App Password if using Gmail
+# EMAIL_HOST_USER = 'runsewemichael39@gmail.com'
+# EMAIL_HOST_PASSWORD = 'jrmoiytqjvwmhejg'  #Developer's email password
+EMAIL_HOST_USER = 'parachcomputers@gmail.com'
+EMAIL_HOST_PASSWORD = 'jqsjnwqvmrlpzfoi'
 
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-ADMIN_EMAIL = 'runsewemichael39@gmail.com'  # where you want to receive notifications
+# ADMIN_EMAIL = 'runsewemichael39@gmail.com'  # where you want to receive notifications
+ADMIN_EMAIL = 'parachcomputers@gmail.com'
 
 
 
@@ -244,11 +252,10 @@ PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY', default='sk_test_xxx')
 PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY', default='pk_test_xxx')
 PAYSTACK_BASE_URL = getattr(settings, "PAYSTACK_BASE_URL", "https://api.paystack.co")
 
-FRONTEND_URL = config('FRONTEND_URL', default='https://parachsms.vercel.app')
+FRONTEND_URL = config('FRONTEND_URL', default='https://parach-sms.vercel.app/')
 
 
-TERMII_API_KEY = "TLSRFdFLVgifWBQwMrTdQzykLCqAGKKhTOObsuiGYYusaKQuCOjjLwccOJmATm"    #main account
-# TERMII_API_KEY = "TLUBlQJeuUcOiHWJdKHAIwWnQGcgLMKBHaQSevRZZHJIpmrsXZIzKSdcfSrtXI"    #test account
+TERMII_API_KEY = "TLSRFdFLVgifWBQwMrTdQzykLCqAGKKhTOObsuiGYYusaKQuCOjjLwccOJmATm"    #Developer's account
 TERMII_BASE_URL = "https://v3.api.termii.com"
 
 

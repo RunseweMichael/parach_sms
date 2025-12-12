@@ -52,7 +52,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             "id", "username", "email", "name", "gender", "birth_date",
             "phone_number", "address", "consent", "registration_date",
             "amount_paid", "amount_owed", "next_due_date", "is_active",
-            "course", "certificates", "password", "course_name","center"
+            "course", "certificates", "password", "course_name","center",
         ]
         extra_kwargs = {"username": {"required": False, "allow_blank": True}}
 
@@ -117,6 +117,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'registration_date',
             'discounted_price',
             'certificates',
+            "has_used_coupon",
         ]
         read_only_fields = [
             'id',

@@ -46,7 +46,7 @@ def send_onboarding_after_first_payment(sender, instance, **kwargs):
             "name": instance.name or instance.email,
             "year": timezone.now().year,
             "logo": "https://parachictacademy.com.ng/wp-content/uploads/2019/08/Parach-computers-ibadan-logo-1-e1565984209812.png",  # ADD YOUR LOGO URL
-            "dashboard_url": "https://yourdomain.com/dashboard",       # UPDATE WITH ACTUAL DASHBOARD URL
+            "dashboard_url": "https://parach-sms.vercel.app/student/dashboard",       # UPDATE WITH ACTUAL DASHBOARD URL
         }
         
 
